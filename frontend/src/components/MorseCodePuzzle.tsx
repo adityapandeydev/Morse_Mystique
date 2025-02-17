@@ -38,9 +38,9 @@ export default function MorseCodePuzzle() {
                             onChange={(e) => handleChange(index, e.target.value)}
                             disabled={unlocked[index]}
                         />
-                        <div className="w-54 h-10 p-2 bg-gray-800 text-center rounded-md">
-                            {unlocked[index] && (
-                                puzzle.next === "PUZZLE OVER" ? (
+                        {unlocked[index] && (
+                            <div className="w-48 p-2 bg-gray-800 text-center rounded-md">
+                                {puzzle.next === "PUZZLE OVER" ? (
                                     <span className="text-green-400 font-bold">🎉 Puzzle Completed! 🎉</span>
                                 ) : (
                                     <a
@@ -51,9 +51,9 @@ export default function MorseCodePuzzle() {
                                     >
                                         Next Puzzle
                                     </a>
-                                )
-                            )}
-                        </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
