@@ -174,7 +174,6 @@ router.post("/verify", validateRequest, async (req, res) => {
     const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT);
 
     try {
-        // Get session start time and check if session is valid
         const user = await pool.query(
             `SELECT 
                 *,
@@ -191,23 +190,26 @@ router.post("/verify", validateRequest, async (req, res) => {
             });
         }
 
-        const elapsedTime = user.rows[0].elapsed_time;
+        const elapsedTime = user.rows[0].elapsed_time || 0;
         const timeRemaining = Math.max(0, sessionTimeout - elapsedTime);
 
-        if (timeRemaining === 0) {
-            // Auto-submit if time is up
-            // ... handle auto-submission ...
+        // If time is up and not submitted, trigger auto-submit
+        if (timeRemaining <= 0 && user.rows[0].total_time === null) {
             return res.json({
                 success: true,
+                isSubmitted: false,
                 timeRemaining: 0,
-                isExpired: true
+                shouldSubmit: true,
+                solvedCount: user.rows[0].solved_count
             });
         }
 
         res.json({ 
             success: true,
+            isSubmitted: user.rows[0].total_time !== null,
             timeRemaining,
-            isExpired: false
+            shouldSubmit: false,
+            solvedCount: user.rows[0].solved_count
         });
     } catch (error) {
         handleServerError(error, res);
