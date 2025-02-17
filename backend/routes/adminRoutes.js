@@ -116,7 +116,7 @@ router.post("/add-user", authenticateAdmin, async (req, res) => {
 
   try {
     await pool.query(
-      "INSERT INTO registered_users (email_id, added_by_admin) VALUES ($1, $2)",
+      "INSERT INTO registered_users (email_id, added_by) VALUES ($1, $2)",
       [email, addedByAdmin]
     );
     res.json({ success: true, message: "User added successfully" });
