@@ -7,8 +7,21 @@ const userRoutes = require("./routes/userRoutes");
 
 const app = express();
 
-app.use(cors());
+// Update CORS configuration to be more permissive in development
+const corsOptions = {
+    origin: process.env.NODE_ENV === 'production' 
+        ? process.env.FRONTEND_URL 
+        : '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Add OPTIONS handling for preflight requests
+app.options('*', cors(corsOptions));
 
 // Use Routes
 app.use("/api/admin", adminRoutes);
