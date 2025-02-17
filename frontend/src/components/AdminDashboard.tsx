@@ -12,7 +12,7 @@ export default function AdminDashboard() {
     const [addMessage, setAddMessage] = useState("");
     const [token, setToken] = useState(() => {
         // Initialize token from localStorage
-        return localStorage.getItem("adminToken") || "";
+        return localStorage.getItem("adminToken") ?? "";
     });
     const [showRegister, setShowRegister] = useState(false);
     const [registerData, setRegisterData] = useState({

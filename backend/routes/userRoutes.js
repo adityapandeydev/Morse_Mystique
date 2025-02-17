@@ -1,6 +1,6 @@
 const express = require("express");
 const rateLimit = require('express-rate-limit');
-const { puzzleLinks, answers, PUZZLE_TIMEOUT, MAX_ATTEMPTS } = require('../config/puzzleData');
+const { puzzleLinks, answers } = require('../config/puzzleData');
 const { validateRequest } = require('../middleware/validation');
 const pool = require("../config/db");
 const { validateEmail } = require('../utils/validators');
@@ -12,12 +12,6 @@ const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
     message: { success: false, message: "Too many login attempts" }
-});
-
-const checkAnswerLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: MAX_ATTEMPTS,
-    message: { success: false, message: "Too many answer attempts" }
 });
 
 // Error handler
@@ -61,7 +55,16 @@ router.post("/login", loginLimiter, async (req, res) => {
             );
         }
 
-        res.json({ success: true });
+        // Set session start time in database
+        await pool.query(
+            "UPDATE users SET session_start = NOW() WHERE email_id = $1",
+            [email]
+        );
+
+        res.json({ 
+            success: true,
+            sessionTimeout: parseInt(process.env.SESSION_TIMEOUT)
+        });
     } catch (error) {
         handleServerError(error, res);
     }
@@ -71,8 +74,8 @@ router.post("/login", loginLimiter, async (req, res) => {
 router.post("/submit-time", async (req, res) => {
     const { email, totalTime, solvedCount } = req.body;
     
-    // Validate submission
-    if (totalTime < 0 || totalTime > PUZZLE_TIMEOUT || solvedCount < 0 || solvedCount > 5) {
+    // Only check for valid ranges
+    if (totalTime < 0 || solvedCount < 0 || solvedCount > 5) {
         return res.status(400).json({ 
             success: false, 
             message: "Invalid submission data" 
@@ -116,7 +119,7 @@ router.get("/puzzle/:index", async (req, res) => {
 });
 
 /** Check Answer */
-router.post("/check-answer", checkAnswerLimiter, async (req, res) => {
+router.post("/check-answer", async (req, res) => {
     const { index, answer, email } = req.body;
     
     if (!email || index < 0 || index >= answers.length || typeof answer !== 'string') {
@@ -165,27 +168,47 @@ router.post("/check-answer", checkAnswerLimiter, async (req, res) => {
     }
 });
 
-/** Verify User Session */
+/** Verify Session and Get Time Remaining */
 router.post("/verify", validateRequest, async (req, res) => {
     const { email, deviceID } = req.body;
+    const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT);
 
     try {
-        // Only check if user exists with this device ID
+        // Get session start time and check if session is valid
         const user = await pool.query(
-            "SELECT * FROM users WHERE email_id = $1 AND device_id = $2",
+            `SELECT 
+                *,
+                EXTRACT(EPOCH FROM (NOW() - session_start))::integer as elapsed_time
+            FROM users 
+            WHERE email_id = $1 AND device_id = $2`,
             [email, deviceID]
         );
 
         if (user.rowCount === 0) {
-            // If user not found with this device ID, force re-login
             return res.json({ 
                 success: false, 
                 message: "Please login to continue" 
             });
         }
 
-        // User exists with this device ID, allow access
-        res.json({ success: true });
+        const elapsedTime = user.rows[0].elapsed_time;
+        const timeRemaining = Math.max(0, sessionTimeout - elapsedTime);
+
+        if (timeRemaining === 0) {
+            // Auto-submit if time is up
+            // ... handle auto-submission ...
+            return res.json({
+                success: true,
+                timeRemaining: 0,
+                isExpired: true
+            });
+        }
+
+        res.json({ 
+            success: true,
+            timeRemaining,
+            isExpired: false
+        });
     } catch (error) {
         handleServerError(error, res);
     }

@@ -31,7 +31,59 @@ const MorseCodePuzzle = () => {
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [puzzleData, setPuzzleData] = useState<{[key: number]: {next: string}}>({});
 
-    // Add effect to initialize from localStorage after verification
+    // Generate deviceID once and store it
+    useEffect(() => {
+        if (!localStorage.getItem("deviceID")) {
+            localStorage.setItem("deviceID", crypto.randomUUID());
+        }
+    }, []);
+
+    // Move getTotalTime before handleSubmit
+    const getTotalTime = useCallback((): number => {
+        return timers.reduce((acc: number, curr: number) => acc + curr, 0);
+    }, [timers]);
+
+    const handleSubmit = useCallback(async () => {
+        const totalTime = getTotalTime();
+        const userEmail = localStorage.getItem("userEmail");
+        const solvedCount = unlocked.filter(Boolean).length;
+
+        try {
+            const fetchConfig = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                credentials: 'include' as const
+            };
+
+            const response = await fetch("http://localhost:5000/api/user/submit-time", {
+                ...fetchConfig,
+                body: JSON.stringify({ 
+                    email: userEmail,
+                    totalTime: totalTime,
+                    solvedCount: solvedCount
+                }),
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                setIsSubmitted(true);
+                localStorage.setItem("isSubmitted", "true");
+                setShowFirstConfirm(false);
+                setShowFinalConfirm(false);
+                setIsTimerRunning(false);
+                setCurrentPuzzleStartTime(null);
+            } else {
+                console.error("Failed to submit time:", data.message);
+            }
+        } catch (error) {
+            handleFetchError(error, () => {});
+        }
+    }, [unlocked, getTotalTime]);
+
+    // Move verification effect after handleSubmit
     useEffect(() => {
         const verifyAndInitialize = async () => {
             const userEmail = localStorage.getItem("userEmail");
@@ -55,28 +107,35 @@ const MorseCodePuzzle = () => {
 
                     const data = await response.json();
                     if (data.success) {
-                        // Only initialize from localStorage if verification succeeds
+                        setCountdownTime(data.timeRemaining);
+                        if (data.isExpired) {
+                            handleSubmit();
+                            return;
+                        }
                         setIsLoggedIn(true);
                         setUserInputs(JSON.parse(localStorage.getItem("userInputs") ?? "[]") ?? Array(5).fill(""));
                         setUnlocked(JSON.parse(localStorage.getItem("unlockedPuzzles") ?? "[]") ?? Array(5).fill(false));
                         setTimers(JSON.parse(localStorage.getItem("puzzleTimers") ?? "[]") ?? Array(5).fill(0));
-                        setCountdownTime(parseInt(localStorage.getItem("countdownTime") ?? "60"));
                         setIsSubmitted(localStorage.getItem("isSubmitted") === "true");
                     } else {
-                        // Clear everything if verification fails
-                        localStorage.clear();
+                        // Only clear login state, keep deviceID
+                        localStorage.removeItem("userEmail");
+                        localStorage.removeItem("userLoggedIn");
+                        localStorage.removeItem("userInputs");
+                        localStorage.removeItem("unlockedPuzzles");
+                        localStorage.removeItem("puzzleTimers");
+                        localStorage.removeItem("countdownTime");
+                        localStorage.removeItem("isSubmitted");
                         setIsLoggedIn(false);
                     }
                 } catch (error) {
                     console.error("Session verification error:", error);
-                    localStorage.clear();
                     setIsLoggedIn(false);
                 }
             }
         };
-
         verifyAndInitialize();
-    }, []);
+    }, [handleSubmit]);
 
     // Save progress to localStorage whenever it changes
     useEffect(() => {
@@ -133,51 +192,6 @@ const MorseCodePuzzle = () => {
         localStorage.setItem("puzzleTimers", JSON.stringify(timers));
     }, [timers]);
 
-    // Move getTotalTime before handleSubmit
-    const getTotalTime = useCallback((): number => {
-        return timers.reduce((acc: number, curr: number) => acc + curr, 0);
-    }, [timers]);
-
-    const handleSubmit = useCallback(async () => {
-        const totalTime = getTotalTime();
-        const userEmail = localStorage.getItem("userEmail");
-        const solvedCount = unlocked.filter(Boolean).length;
-
-        try {
-            const fetchConfig = {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                credentials: 'include' as const
-            };
-
-            const response = await fetch("http://localhost:5000/api/user/submit-time", {
-                ...fetchConfig,
-                body: JSON.stringify({ 
-                    email: userEmail,
-                    totalTime: totalTime,
-                    solvedCount: solvedCount
-                }),
-            });
-
-            const data = await response.json();
-            if (data.success) {
-                setIsSubmitted(true);
-                localStorage.setItem("isSubmitted", "true");
-                setShowFirstConfirm(false);
-                setShowFinalConfirm(false);
-                setIsTimerRunning(false);
-                setCurrentPuzzleStartTime(null);
-            } else {
-                console.error("Failed to submit time:", data.message);
-            }
-        } catch (error) {
-            handleFetchError(error, () => {});
-        }
-    }, [unlocked, getTotalTime]);
-
     // Add countdown timer effect
     useEffect(() => {
         if (isLoggedIn && countdownTime > 0) {
@@ -204,7 +218,7 @@ const MorseCodePuzzle = () => {
             return;
         }
 
-        const deviceID = localStorage.getItem("deviceID") || crypto.randomUUID();
+        const deviceID = localStorage.getItem("deviceID");
         try {
             const fetchConfig = {
                 method: 'POST',
@@ -222,13 +236,13 @@ const MorseCodePuzzle = () => {
 
             const data = await response.json();
             if (data.success) {
+                setCountdownTime(data.sessionTimeout);
                 // Reset all states and localStorage on successful login
                 setIsLoggedIn(true);
                 setUserInputs(Array(5).fill(""));
                 setUnlocked(Array(5).fill(false));
                 setTimers(Array(5).fill(0));
                 setCurrentTimer(0);
-                setCountdownTime(60);
                 setIsSubmitted(false);
                 setCurrentPuzzleStartTime(Date.now());
                 setIsTimerRunning(true);
@@ -239,7 +253,7 @@ const MorseCodePuzzle = () => {
                 localStorage.setItem("userInputs", JSON.stringify(Array(5).fill("")));
                 localStorage.setItem("unlockedPuzzles", JSON.stringify(Array(5).fill(false)));
                 localStorage.setItem("puzzleTimers", JSON.stringify(Array(5).fill(0)));
-                localStorage.setItem("countdownTime", "60");
+                localStorage.setItem("countdownTime", data.sessionTimeout.toString());
                 localStorage.removeItem("isSubmitted");
             } else {
                 setLoginMessage("Login denied: " + data.message);

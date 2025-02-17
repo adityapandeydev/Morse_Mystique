@@ -11,7 +11,5 @@ const puzzleLinks = [
 
 module.exports = {
     puzzleLinks,
-    answers,
-    PUZZLE_TIMEOUT: parseInt(process.env.PUZZLE_TIMEOUT) || 60,
-    MAX_ATTEMPTS: parseInt(process.env.MAX_ATTEMPTS_PER_MINUTE) || 30
+    answers
 }; 
