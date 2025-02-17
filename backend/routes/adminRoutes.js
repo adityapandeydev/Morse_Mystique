@@ -7,57 +7,91 @@ const router = express.Router();
 
 /** Admin Registration */
 router.post("/register", async (req, res) => {
-  const { name, email, password } = req.body;
-
   try {
-    // Check if admin already exists
-    const existingAdmin = await pool.query("SELECT * FROM admins WHERE email = $1", [email]);
-    if (existingAdmin.rowCount > 0) {
-      return res.status(400).json({ success: false, message: "Admin already exists" });
+    const { name, email, password } = req.body;
+    
+    // Log the request data (remove in production)
+    console.log("Register attempt:", { name, email });
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields"
+      });
     }
 
-    // Hash password before storing
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insert new admin
-    await pool.query(
-      "INSERT INTO admins (name, email, password) VALUES ($1, $2, $3)",
-      [name, email, hashedPassword]
+    // Check if admin already exists using correct column names
+    const existingAdmin = await pool.query(
+      "SELECT * FROM admins WHERE email_id = $1 OR name = $2",
+      [email, name]
     );
 
-    res.status(201).json({ success: true, message: "Admin registered successfully" });
+    if (existingAdmin.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Admin with this email or name already exists"
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Insert using correct column names
+    await pool.query(
+      "INSERT INTO admins (email_id, name, password_hash) VALUES ($1, $2, $3)",
+      [email, name, hashedPassword]
+    );
+
+    res.json({ success: true, message: "Admin registered successfully" });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Registration error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Registration failed: " + error.message
+    });
   }
 });
 
 /** Admin Login */
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-
   try {
-    const admin = await pool.query("SELECT * FROM admins WHERE email = $1", [email]);
+    const { email, password } = req.body;
 
-    if (admin.rowCount === 0) {
-      return res.status(401).json({ success: false, message: "Admin not found" });
+    // Use correct column name email_id
+    const result = await pool.query(
+      "SELECT * FROM admins WHERE email_id = $1",
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials"
+      });
     }
 
-    const validPassword = await bcrypt.compare(password, admin.rows[0].password);
+    const admin = result.rows[0];
+    const validPassword = await bcrypt.compare(password, admin.password_hash);
+
     if (!validPassword) {
-      return res.status(401).json({ success: false, message: "Invalid credentials" });
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials"
+      });
     }
 
     const token = jwt.sign(
-      { adminId: admin.rows[0].id, name: admin.rows[0].name }, 
-      process.env.JWT_SECRET, 
-      { expiresIn: "2h" }
+      { id: admin.email_id, name: admin.name },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
     );
 
-    res.json({ success: true, token, message: "Login successful" });
+    res.json({ success: true, token });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Login error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Login failed: " + error.message
+    });
   }
 });
 

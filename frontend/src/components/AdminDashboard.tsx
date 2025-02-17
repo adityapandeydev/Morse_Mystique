@@ -81,7 +81,11 @@ export default function AdminDashboard() {
         try {
             const response = await fetch(`${API_URL}/api/admin/register`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                credentials: 'include',
                 body: JSON.stringify(registerData),
             });
 
@@ -93,7 +97,8 @@ export default function AdminDashboard() {
                 setLoginMessage("Registration failed: " + data.message);
             }
         } catch (error) {
-            setLoginMessage("Server error during registration: " + error);
+            console.error("Registration error:", error);
+            setLoginMessage("Server error during registration. Please try again later.");
         }
     };
 
