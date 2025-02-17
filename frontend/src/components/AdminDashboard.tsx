@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function AdminDashboard() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -53,7 +55,7 @@ export default function AdminDashboard() {
 
     const handleAdminLogin = async () => {
         try {
-            const response = await fetch("http://localhost:5000/api/admin/login", {
+            const response = await fetch(`${API_URL}/api/admin/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
@@ -77,7 +79,7 @@ export default function AdminDashboard() {
 
     const handleRegister = async () => {
         try {
-            const response = await fetch("http://localhost:5000/api/admin/register", {
+            const response = await fetch(`${API_URL}/api/admin/register`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(registerData),
@@ -101,7 +103,7 @@ export default function AdminDashboard() {
         try {
             const results = await Promise.all(
                 emailList.map(email =>
-                    fetch("http://localhost:5000/api/admin/add-user", {
+                    fetch(`${API_URL}/api/admin/add-user`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
