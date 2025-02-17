@@ -36,6 +36,21 @@ export default function AdminDashboard() {
         };
     }, []);
 
+    // Add keypress handlers
+    const handleLoginKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            handleAdminLogin();
+        }
+    };
+
+    const handleRegisterKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            handleRegister();
+        }
+    };
+
+    
+
     const handleAdminLogin = async () => {
         try {
             const response = await fetch("http://localhost:5000/api/admin/login", {
@@ -128,6 +143,7 @@ export default function AdminDashboard() {
                                 placeholder="Admin Name"
                                 value={registerData.name}
                                 onChange={(e) => setRegisterData({...registerData, name: e.target.value})}
+                                autoFocus
                             />
                             <input
                                 type="email"
@@ -135,6 +151,7 @@ export default function AdminDashboard() {
                                 placeholder="Email"
                                 value={registerData.email}
                                 onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
+                                onKeyPress={handleRegisterKeyPress}
                             />
                             <input
                                 type="password"
@@ -142,6 +159,7 @@ export default function AdminDashboard() {
                                 placeholder="Password"
                                 value={registerData.password}
                                 onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
+                                onKeyPress={handleRegisterKeyPress}
                             />
                             <button
                                 className="mt-2 px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-md"
@@ -158,6 +176,8 @@ export default function AdminDashboard() {
                                 placeholder="Admin Email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
+                                onKeyPress={handleLoginKeyPress}
+                                autoFocus
                             />
                             <input
                                 type="password"
@@ -165,6 +185,7 @@ export default function AdminDashboard() {
                                 placeholder="Password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
+                                onKeyPress={handleLoginKeyPress}
                             />
                             <button
                                 className="mt-2 px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-md"
