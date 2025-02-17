@@ -321,32 +321,42 @@ const MorseCodePuzzle = () => {
                 // Stop timer first
                 setIsTimerRunning(false);
                 
-                // Update timer for current puzzle
-                const newTimers = [...timers];
-                newTimers[index] = currentTimer;
-                setTimers(newTimers);
-                
-                // Update unlocked status
-                const newUnlocked = [...unlocked];
-                newUnlocked[index] = true;
-                setUnlocked(newUnlocked);
+                // Update states in sequence
+                await Promise.all([
+                    new Promise<void>(resolve => {
+                        // Update timer for current puzzle
+                        const newTimers = [...timers];
+                        newTimers[index] = currentTimer;
+                        setTimers(newTimers);
+                        resolve();
+                    }),
+                    new Promise<void>(resolve => {
+                        // Update unlocked status
+                        const newUnlocked = [...unlocked];
+                        newUnlocked[index] = true;
+                        setUnlocked(newUnlocked);
+                        resolve();
+                    }),
+                    new Promise<void>(resolve => {
+                        // Save puzzle data
+                        setPuzzleData(prev => ({
+                            ...prev,
+                            [index]: { next: data.next }
+                        }));
+                        resolve();
+                    })
+                ]);
 
-                // Save puzzle data
-                setPuzzleData(prev => ({
-                    ...prev,
-                    [index]: { next: data.next }
-                }));
-
-                // Wait for state updates
-                await new Promise(resolve => setTimeout(resolve, 0));
+                // Ensure state updates are complete
+                await new Promise(resolve => setTimeout(resolve, 50));
 
                 // Start timer for next puzzle if not the last one
-                if (index < puzzles.length - 1) {
+                if (index < 4) {  // Using 4 instead of puzzles.length - 1 for clarity
                     setCurrentTimer(0);
                     setCurrentPuzzleStartTime(Date.now());
                     setIsTimerRunning(true);
                     
-                    // Focus next input
+                    // Focus next input after states are updated
                     const nextInput = document.querySelector(`input[data-index="${index + 1}"]`) as HTMLInputElement;
                     if (nextInput) {
                         nextInput.focus();
