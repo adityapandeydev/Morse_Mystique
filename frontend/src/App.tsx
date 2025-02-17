@@ -5,12 +5,10 @@ import AdminDashboard from "./components/AdminDashboard";
 function App() {
   return (
     <Router>
-      <div>
-        <Routes>
-          <Route path="/" element={<MorseCodePuzzle />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/" element={<MorseCodePuzzle />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+      </Routes>
     </Router>
   );
 }
