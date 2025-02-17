@@ -1,7 +1,7 @@
 const express = require("express");
 const rateLimit = require('express-rate-limit');
 const { puzzleLinks, answers } = require('../config/puzzleData');
-const { validateRequest } = require('../middleware/validation');
+const { validateLoginRequest, validateSubmitRequest, validateVerifyRequest } = require('../middleware/validation');
 const pool = require("../config/db");
 const { validateEmail } = require('../utils/validators');
 
@@ -21,7 +21,7 @@ const handleServerError = (error, res) => {
 };
 
 /** User Login */
-router.post("/login", loginLimiter, async (req, res) => {
+router.post("/login", loginLimiter, validateLoginRequest, async (req, res) => {
     const { email, deviceID } = req.body;
 
     if (!validateEmail(email)) {
@@ -71,37 +71,20 @@ router.post("/login", loginLimiter, async (req, res) => {
 });
 
 /** Update User's Total Time and Solved Count */
-router.post("/submit-time", async (req, res) => {
+router.post("/submit-time", validateSubmitRequest, async (req, res) => {
     const { email, totalTime, solvedCount } = req.body;
     
-    // Only check for valid ranges
-    if (totalTime < 0 || solvedCount < 0 || solvedCount > 5) {
-        return res.status(400).json({ 
-            success: false, 
-            message: "Invalid submission data" 
-        });
-    }
-
     try {
-        // Verify user hasn't already submitted
-        const user = await pool.query(
-            "SELECT total_time FROM users WHERE email_id = $1",
-            [email]
-        );
-
-        if (user.rows[0].total_time !== null) {
-            return res.status(400).json({
-                success: false,
-                message: "Time already submitted"
-            });
-        }
-
+        // Store both the total time and the remaining time
         await pool.query(
-            "UPDATE users SET total_time = $1, solved_count = $2 WHERE email_id = $3",
-            [totalTime, solvedCount, email]
+            "UPDATE users SET total_time = $1, solved_count = $2, remaining_time = $3 WHERE email_id = $4",
+            [totalTime, solvedCount, req.body.remainingTime, email]
         );
 
-        res.json({ success: true });
+        res.json({ 
+            success: true,
+            totalTime: totalTime
+        });
     } catch (error) {
         handleServerError(error, res);
     }
@@ -169,7 +152,7 @@ router.post("/check-answer", async (req, res) => {
 });
 
 /** Verify Session and Get Time Remaining */
-router.post("/verify", validateRequest, async (req, res) => {
+router.post("/verify", validateVerifyRequest, async (req, res) => {
     const { email, deviceID } = req.body;
     const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT);
 
@@ -177,41 +160,31 @@ router.post("/verify", validateRequest, async (req, res) => {
         const user = await pool.query(
             `SELECT 
                 *,
-                EXTRACT(EPOCH FROM (NOW() - session_start))::integer as elapsed_time
+                CASE 
+                    WHEN total_time IS NOT NULL THEN remaining_time
+                    ELSE GREATEST(0, $1 - EXTRACT(EPOCH FROM (NOW() - session_start))::integer)
+                END as time_remaining
             FROM users 
-            WHERE email_id = $1 AND device_id = $2`,
-            [email, deviceID]
+            WHERE email_id = $2 AND device_id = $3`,
+            [sessionTimeout, email, deviceID]  // Fixed parameter order
         );
 
         if (user.rowCount === 0) {
             return res.json({ 
                 success: false, 
-                message: "Please login to continue" 
-            });
-        }
-
-        const elapsedTime = user.rows[0].elapsed_time || 0;
-        const timeRemaining = Math.max(0, sessionTimeout - elapsedTime);
-
-        // If time is up and not submitted, trigger auto-submit
-        if (timeRemaining <= 0 && user.rows[0].total_time === null) {
-            return res.json({
-                success: true,
-                isSubmitted: false,
-                timeRemaining: 0,
-                shouldSubmit: true,
-                solvedCount: user.rows[0].solved_count
+                message: "User not found"
             });
         }
 
         res.json({ 
             success: true,
             isSubmitted: user.rows[0].total_time !== null,
-            timeRemaining,
-            shouldSubmit: false,
+            timeRemaining: user.rows[0].time_remaining,
+            totalTime: user.rows[0].total_time,
             solvedCount: user.rows[0].solved_count
         });
     } catch (error) {
+        console.error("Verify error:", error);
         handleServerError(error, res);
     }
 });

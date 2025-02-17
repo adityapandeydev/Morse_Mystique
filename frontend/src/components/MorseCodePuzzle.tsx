@@ -3,10 +3,12 @@ import { Puzzle } from "../types";
 import { formatTime, formatCountdown, validateEmail } from "../utils/formatters";
 import FirstConfirmModal from "./modals/FirstConfirmModal";
 import FinalConfirmModal from "./modals/FinalConfirmModal";
+import { useLocalStorage } from "../hooks/useLocalStorage";
+import { useTimer } from "../hooks/useTimer";
 
 const puzzles: Puzzle[] = Array(5).fill(null).map((_, i) => ({ id: i + 1 }));
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Network error handler
 const handleFetchError = (error: unknown, setMessage: (msg: string) => void) => {
@@ -14,44 +16,65 @@ const handleFetchError = (error: unknown, setMessage: (msg: string) => void) => 
     setMessage(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
 };
 
+// Add these utility functions at the top of the component
+const clearAllStorage = () => {
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("userLoggedIn");
+    localStorage.removeItem("userInputs");
+    localStorage.removeItem("unlockedPuzzles");
+    localStorage.removeItem("puzzleTimers");
+    localStorage.removeItem("finalTime");
+    localStorage.removeItem("pausedTime");
+    localStorage.removeItem("isSubmitted");
+};
+
+const resetAllStates = (
+    setIsLoggedIn: (value: boolean) => void,
+    setIsSubmitted: (value: boolean) => void,
+    setFinalTime: (value: number | null) => void,
+    setPausedTime: (value: number | null) => void,
+    setCountdownTime: (value: number) => void
+) => {
+    setIsLoggedIn(false);
+    setIsSubmitted(false);
+    setFinalTime(null);
+    setPausedTime(null);
+    setCountdownTime(60);
+};
+
 const MorseCodePuzzle = () => {
     const [isLoggedIn, setIsLoggedIn] = useState(() => {
         return localStorage.getItem("userLoggedIn") === "true";
     });
 
-    const [userInputs, setUserInputs] = useState(() => {
-        return JSON.parse(localStorage.getItem("userInputs") ?? "[]") || Array(5).fill("");
-    });
+    const [userInputs, setUserInputs] = useLocalStorage('userInputs', Array(5).fill(''));
+    const [unlocked, setUnlocked] = useLocalStorage('unlockedPuzzles', Array(5).fill(false));
+    const [timers, setTimers] = useLocalStorage('puzzleTimers', Array(5).fill(0));
+    const [isSubmitted, setIsSubmitted] = useLocalStorage('isSubmitted', false);
 
-    const [unlocked, setUnlocked] = useState(() => {
-        return JSON.parse(localStorage.getItem("unlockedPuzzles") ?? "[]") || Array(5).fill(false);
-    });
-
-    const [timers, setTimers] = useState(() => {
-        return JSON.parse(localStorage.getItem("puzzleTimers") ?? "[]") || Array(5).fill(0);
-    });
-
-    const [isSubmitted, setIsSubmitted] = useState(() => {
-        return localStorage.getItem("isSubmitted") === "true";
-    });
-
-    // Only start countdown if not submitted
-    const [countdownTime, setCountdownTime] = useState(() => {
-        if (localStorage.getItem("isSubmitted") === "true") {
-            return 0;
-        }
-        // Get from localStorage but will be updated from server on verify/login
-        return parseInt(localStorage.getItem("countdownTime") ?? "0");
-    });
+    // Simple countdown state
+    const [countdownTime, setCountdownTime] = useState(60); // Default to 60 seconds
 
     const [email, setEmail] = useState("");
     const [loginMessage, setLoginMessage] = useState("");
-    const [currentTimer, setCurrentTimer] = useState(0);
+    const [currentTimer, setCurrentTimer] = useTimer(false, null);
     const [isTimerRunning, setIsTimerRunning] = useState(false);
     const [currentPuzzleStartTime, setCurrentPuzzleStartTime] = useState<number | null>(null);
     const [showFirstConfirm, setShowFirstConfirm] = useState(false);
     const [showFinalConfirm, setShowFinalConfirm] = useState(false);
     const [puzzleData, setPuzzleData] = useState<{[key: number]: {next: string}}>({});
+
+    // Add a state to store the final time
+    const [finalTime, setFinalTime] = useState<number | null>(() => {
+        const saved = localStorage.getItem("finalTime");
+        return saved ? parseInt(saved) : null;
+    });
+
+    // Add state for storing the paused time
+    const [pausedTime, setPausedTime] = useState<number | null>(() => {
+        const saved = localStorage.getItem("pausedTime");
+        return saved ? parseInt(saved) : null;
+    });
 
     // Generate deviceID once and store it
     useEffect(() => {
@@ -62,112 +85,188 @@ const MorseCodePuzzle = () => {
 
     // Move getTotalTime before handleSubmit
     const getTotalTime = useCallback((): number => {
-        return timers.reduce((acc: number, curr: number) => acc + curr, 0);
-    }, [timers]);
+        const initialTimeout = parseInt(localStorage.getItem("initialTimeout") ?? "0");
+        if (isSubmitted) {
+            const finalCountdown = parseInt(localStorage.getItem("finalCountdown") ?? "0");
+            return initialTimeout - finalCountdown;
+        }
+        return initialTimeout - countdownTime;
+    }, [countdownTime, isSubmitted]);
 
+    // Update handleSubmit
     const handleSubmit = useCallback(async () => {
-        const totalTime = getTotalTime();
+        const finalCountdown = pausedTime ?? countdownTime;
+        const totalTime = 60 - finalCountdown;
         const userEmail = localStorage.getItem("userEmail");
         const solvedCount = unlocked.filter(Boolean).length;
 
+        if (!userEmail) {
+            console.error("Missing email");
+            return;
+        }
+
+        const submitData = {
+            email: userEmail,
+            totalTime: Math.max(0, totalTime),
+            solvedCount: solvedCount,
+            remainingTime: finalCountdown
+        };
+
         try {
-            const fetchConfig = {
+            const response = await fetch(`${API_URL}/api/user/submit-time`, {
                 method: 'POST',
-                headers: {
+                headers: { 
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                credentials: 'include' as const
-            };
-
-            const response = await fetch(`${API_URL}/api/user/submit-time`, {
-                ...fetchConfig,
-                body: JSON.stringify({ 
-                    email: userEmail,
-                    totalTime: totalTime,
-                    solvedCount: solvedCount
-                }),
+                credentials: 'include',
+                body: JSON.stringify(submitData)
             });
 
             const data = await response.json();
             if (data.success) {
                 setIsSubmitted(true);
-                localStorage.setItem("isSubmitted", "true");
-                
-                // Save final state
-                localStorage.setItem("finalTimers", JSON.stringify(timers));
-                localStorage.setItem("finalUnlocked", JSON.stringify(unlocked));
-                localStorage.setItem("finalUserInputs", JSON.stringify(userInputs));
-                
+                setIsTimerRunning(false);
+                setFinalTime(totalTime);
+                setPausedTime(finalCountdown);
+                localStorage.setItem("finalTime", totalTime.toString());
+                localStorage.setItem("pausedTime", finalCountdown.toString());
                 setShowFirstConfirm(false);
                 setShowFinalConfirm(false);
-                setIsTimerRunning(false);
                 setCurrentPuzzleStartTime(null);
-            } else {
-                console.error("Failed to submit time:", data.message);
+                setCurrentTimer(0);
             }
         } catch (error) {
+            console.error("Submit error:", error);
             handleFetchError(error, () => {});
         }
-    }, [unlocked, getTotalTime, timers, userInputs]);
+    }, [pausedTime, countdownTime, unlocked]);
 
-    // Move verification effect after handleSubmit
+    // Then the useEffect that uses it
+    useEffect(() => {
+        let intervalId: number;
+
+        if (isLoggedIn && !isSubmitted && countdownTime > 0) {
+            intervalId = setInterval(() => {
+                setCountdownTime(prev => {
+                    if (prev <= 0) {
+                        handleSubmit();
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        }
+
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [isLoggedIn, isSubmitted, countdownTime, handleSubmit]);
+
+    // Update login handler to clear all stored times
+    const handleLogin = useCallback(async () => {
+        if (!validateEmail(email)) {
+            setLoginMessage("Please enter a valid email address");
+            return;
+        }
+
+        const deviceID = localStorage.getItem("deviceID");
+        try {
+            const response = await fetch(`${API_URL}/api/user/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({ email, deviceID }),
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                // Clear all stored times
+                localStorage.removeItem("finalTime");
+                localStorage.removeItem("pausedTime");
+                setFinalTime(null);
+                setPausedTime(null);
+                
+                setCountdownTime(data.sessionTimeout);
+                setIsLoggedIn(true);
+                setUserInputs(Array(5).fill(""));
+                setUnlocked(Array(5).fill(false));
+                setTimers(Array(5).fill(0));
+                setCurrentTimer(0);
+                setIsSubmitted(false);
+                setCurrentPuzzleStartTime(Date.now());
+                setIsTimerRunning(true);
+
+                // Reset localStorage
+                localStorage.setItem("userLoggedIn", "true");
+                localStorage.setItem("userEmail", email);
+                localStorage.setItem("userInputs", JSON.stringify(Array(5).fill("")));
+                localStorage.setItem("unlockedPuzzles", JSON.stringify(Array(5).fill(false)));
+                localStorage.setItem("puzzleTimers", JSON.stringify(Array(5).fill(0)));
+                localStorage.removeItem("isSubmitted");
+            } else {
+                setLoginMessage("Login denied: " + data.message);
+            }
+        } catch (error) {
+            handleFetchError(error, setLoginMessage);
+        }
+    }, [email, setIsSubmitted, setCurrentTimer, setTimers, setUnlocked, setUserInputs]);
+
+    // Update the verify endpoint handler
     useEffect(() => {
         const verifyAndInitialize = async () => {
             const userEmail = localStorage.getItem("userEmail");
             const deviceID = localStorage.getItem("deviceID");
+            const storedPausedTime = localStorage.getItem("pausedTime");
 
-            if (userEmail && deviceID) {
-                try {
-                    const response = await fetch(`${API_URL}/api/user/verify`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        },
-                        credentials: 'include',
-                        body: JSON.stringify({ email: userEmail, deviceID }),
-                    });
+            if (!userEmail || !deviceID) {
+                return; // Don't clear storage if credentials are missing
+            }
 
-                    const data = await response.json();
-                    if (data.success) {
-                        if (!data.isSubmitted) {
-                            // Use server's remaining time
-                            setCountdownTime(data.timeRemaining);
-                            localStorage.setItem("countdownTime", data.timeRemaining.toString());
-                            
-                            // Auto-submit if server indicates time is up
-                            if (data.shouldSubmit) {
-                                handleSubmit();
-                                return;
-                            }
-                        } else {
-                            setCountdownTime(0);
-                        }
-                        setIsLoggedIn(true);
-                        setUserInputs(JSON.parse(localStorage.getItem("userInputs") ?? "[]") ?? Array(5).fill(""));
-                        setUnlocked(JSON.parse(localStorage.getItem("unlockedPuzzles") ?? "[]") ?? Array(5).fill(false));
-                        setTimers(JSON.parse(localStorage.getItem("puzzleTimers") ?? "[]") ?? Array(5).fill(0));
-                        setIsSubmitted(localStorage.getItem("isSubmitted") === "true");
-                    } else {
-                        // Only clear login state, keep deviceID
-                        localStorage.removeItem("userEmail");
-                        localStorage.removeItem("userLoggedIn");
-                        localStorage.removeItem("userInputs");
-                        localStorage.removeItem("unlockedPuzzles");
-                        localStorage.removeItem("puzzleTimers");
-                        localStorage.removeItem("countdownTime");
-                        localStorage.removeItem("isSubmitted");
-                        setIsLoggedIn(false);
+            try {
+                const response = await fetch(`${API_URL}/api/user/verify`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ email: userEmail, deviceID }),
+                });
+
+                const data = await response.json();
+                
+                if (!data.success) {
+                    // Only clear if explicitly not found
+                    if (data.message === "User not found") {
+                        clearAllStorage();
+                        resetAllStates(setIsLoggedIn, setIsSubmitted, setFinalTime, setPausedTime, setCountdownTime);
                     }
-                } catch (error) {
-                    console.error("Session verification error:", error);
-                    setIsLoggedIn(false);
+                    return;
                 }
+
+                // User exists and is verified
+                setIsLoggedIn(true);
+                if (data.isSubmitted) {
+                    setIsSubmitted(true);
+                    setFinalTime(data.totalTime);
+                    if (storedPausedTime) {
+                        setPausedTime(parseInt(storedPausedTime));
+                    }
+                    setCountdownTime(data.timeRemaining);
+                } else {
+                    setCountdownTime(data.timeRemaining);
+                }
+            } catch (error) {
+                console.error("Session verification error:", error);
+                // Don't clear storage on network errors
             }
         };
+
         verifyAndInitialize();
-    }, [handleSubmit]);
+    }, [setIsLoggedIn, setIsSubmitted, setFinalTime, setPausedTime, setCountdownTime]);
 
     // Save progress to localStorage whenever it changes
     useEffect(() => {
@@ -200,12 +299,12 @@ const MorseCodePuzzle = () => {
         }
     }, [isLoggedIn, isSubmitted, currentPuzzleStartTime, unlocked]);
 
-    // Timer effect
+    // Update timer effect
     type Timeout = ReturnType<typeof setTimeout>;
     useEffect(() => {
         let intervalId: Timeout;
 
-        if (isTimerRunning && currentPuzzleStartTime) {
+        if (isTimerRunning && currentPuzzleStartTime && !isSubmitted && !pausedTime) {
             intervalId = setInterval(() => {
                 const currentTime = Math.floor((Date.now() - currentPuzzleStartTime) / 1000);
                 setCurrentTimer(currentTime);
@@ -217,81 +316,21 @@ const MorseCodePuzzle = () => {
                 clearInterval(intervalId);
             }
         };
-    }, [isTimerRunning, currentPuzzleStartTime]);
+    }, [isTimerRunning, currentPuzzleStartTime, isSubmitted, pausedTime, setCurrentTimer]);
 
     // Save timers to localStorage
     useEffect(() => {
         localStorage.setItem("puzzleTimers", JSON.stringify(timers));
     }, [timers]);
 
-    // Update countdown timer effect
-    useEffect(() => {
-        if (isLoggedIn && !isSubmitted && countdownTime > 0) {
-            const countdownInterval = setInterval(() => {
-                setCountdownTime(prevTime => {
-                    const newTime = prevTime - 1;
-                    localStorage.setItem("countdownTime", newTime.toString());
-                    
-                    if (newTime === 0) {
-                        handleSubmit();
-                    }
-                    return newTime;
-                });
-            }, 1000);
-
-            return () => clearInterval(countdownInterval);
+    // Add handleLoginKeyPress function
+    const handleLoginKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            handleLogin();
         }
-    }, [isLoggedIn, isSubmitted, countdownTime, handleSubmit]);
+    };
 
-    // Memoize handlers
-    const handleLogin = useCallback(async () => {
-        if (!validateEmail(email)) {
-            setLoginMessage("Please enter a valid email address");
-            return;
-        }
-
-        const deviceID = localStorage.getItem("deviceID");
-        try {
-            const response = await fetch(`${API_URL}/api/user/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({ email, deviceID }),
-            });
-
-            const data = await response.json();
-            if (data.success) {
-                // Use server's session timeout
-                setCountdownTime(data.sessionTimeout);
-                localStorage.setItem("countdownTime", data.sessionTimeout.toString());
-                
-                setIsLoggedIn(true);
-                setUserInputs(Array(5).fill(""));
-                setUnlocked(Array(5).fill(false));
-                setTimers(Array(5).fill(0));
-                setCurrentTimer(0);
-                setIsSubmitted(false);
-                setCurrentPuzzleStartTime(Date.now());
-                setIsTimerRunning(true);
-
-                // Reset localStorage
-                localStorage.setItem("userLoggedIn", "true");
-                localStorage.setItem("userEmail", email);
-                localStorage.setItem("userInputs", JSON.stringify(Array(5).fill("")));
-                localStorage.setItem("unlockedPuzzles", JSON.stringify(Array(5).fill(false)));
-                localStorage.setItem("puzzleTimers", JSON.stringify(Array(5).fill(0)));
-                localStorage.removeItem("isSubmitted");
-            } else {
-                setLoginMessage("Login denied: " + data.message);
-            }
-        } catch (error) {
-            handleFetchError(error, setLoginMessage);
-        }
-    }, [email]);
-
+    // Add handleChange function back
     const handleChange = useCallback(async (index: number, value: string) => {
         if (countdownTime === 0) return;
         
@@ -321,42 +360,29 @@ const MorseCodePuzzle = () => {
                 // Stop timer first
                 setIsTimerRunning(false);
                 
-                // Update states in sequence
-                await Promise.all([
-                    new Promise<void>(resolve => {
-                        // Update timer for current puzzle
-                        const newTimers = [...timers];
-                        newTimers[index] = currentTimer;
-                        setTimers(newTimers);
-                        resolve();
-                    }),
-                    new Promise<void>(resolve => {
-                        // Update unlocked status
-                        const newUnlocked = [...unlocked];
-                        newUnlocked[index] = true;
-                        setUnlocked(newUnlocked);
-                        resolve();
-                    }),
-                    new Promise<void>(resolve => {
-                        // Save puzzle data
-                        setPuzzleData(prev => ({
-                            ...prev,
-                            [index]: { next: data.next }
-                        }));
-                        resolve();
-                    })
-                ]);
-
-                // Ensure state updates are complete
-                await new Promise(resolve => setTimeout(resolve, 50));
+                // Update timer for current puzzle
+                const newTimers = [...timers];
+                newTimers[index] = currentTimer;
+                setTimers(newTimers);
+                
+                // Update unlocked status
+                const newUnlocked = [...unlocked];
+                newUnlocked[index] = true;
+                setUnlocked(newUnlocked);
+                
+                // Save puzzle data
+                setPuzzleData(prev => ({
+                    ...prev,
+                    [index]: { next: data.next }
+                }));
 
                 // Start timer for next puzzle if not the last one
-                if (index < 4) {  // Using 4 instead of puzzles.length - 1 for clarity
+                if (index < 4) {
                     setCurrentTimer(0);
                     setCurrentPuzzleStartTime(Date.now());
                     setIsTimerRunning(true);
                     
-                    // Focus next input after states are updated
+                    // Focus next input
                     const nextInput = document.querySelector(`input[data-index="${index + 1}"]`) as HTMLInputElement;
                     if (nextInput) {
                         nextInput.focus();
@@ -366,14 +392,19 @@ const MorseCodePuzzle = () => {
         } catch (error) {
             handleFetchError(error, () => {});
         }
-    }, [countdownTime, timers, unlocked, currentTimer, userInputs]);
+    }, [countdownTime, timers, unlocked, currentTimer, userInputs, setTimers, setUnlocked, setPuzzleData]);
 
-    // Add handleLoginKeyPress function
-    const handleLoginKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            handleLogin();
-        }
-    };
+    // Update the first submit click handler
+    const handleFirstSubmit = useCallback(() => {
+        setPausedTime(countdownTime);
+        setShowFirstConfirm(true);
+    }, [countdownTime]);
+
+    const handleFinalConfirm = useCallback(() => {
+        setShowFirstConfirm(false);
+        setShowFinalConfirm(false);
+        handleSubmit();
+    }, [handleSubmit]);
 
     if (!isLoggedIn) {
         return (
@@ -401,13 +432,15 @@ const MorseCodePuzzle = () => {
 
     return (
         <div className="flex flex-col min-h-screen bg-gradient-to-r from-gray-900 to-black text-white">
-            {/* Countdown timer without logout button */}
+            {/* Countdown timer display */}
             <div className="p-4 flex justify-center items-center">
                 <div className="text-center">
-                    <div className={`text-2xl font-mono font-bold ${countdownTime < 300 ? 'text-red-500' : 'text-white'}`}>
-                        {formatCountdown(countdownTime)}
+                    <div className={`text-2xl font-mono font-bold ${!isSubmitted && countdownTime < 300 ? 'text-red-500' : 'text-white'}`}>
+                        {formatCountdown(isSubmitted ? (pausedTime ?? countdownTime) : countdownTime)}
                     </div>
-                    <div className="text-sm text-gray-400">Time Remaining</div>
+                    <div className="text-sm text-gray-400">
+                        {isSubmitted ? "Time Remaining" : "Time Remaining"}
+                    </div>
                 </div>
             </div>
             
@@ -455,17 +488,23 @@ const MorseCodePuzzle = () => {
                     
                     {/* Final time display or submit button */}
                     <div className="flex items-center justify-between w-full gap-4">
-                        {isSubmitted ? (
+                        {isSubmitted && (
+                            <div className="w-full h-12 bg-blue-500 text-white font-bold rounded-md flex items-center justify-center">
+                                Final Time: {formatTime(finalTime ?? 0)}
+                            </div>
+                        )}
+                        {!isSubmitted && (showFirstConfirm || showFinalConfirm) && (
                             <div className="w-full flex flex-col items-center justify-center h-12 bg-gray-900 text-center rounded-md shadow-md font-mono">
-                                <div>Final Time: {formatTime(getTotalTime())}</div>
+                                <div>Time: {formatTime(60 - (pausedTime ?? countdownTime))}</div>
                                 <div className="text-sm text-gray-400">
                                     Puzzles Solved: {unlocked.filter(Boolean).length}/5
                                 </div>
                             </div>
-                        ) : (
+                        )}
+                        {!isSubmitted && !showFirstConfirm && !showFinalConfirm && (
                             <button
                                 className="w-full h-12 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-md"
-                                onClick={() => setShowFirstConfirm(true)}
+                                onClick={handleFirstSubmit}
                             >
                                 Submit
                             </button>
@@ -487,9 +526,9 @@ const MorseCodePuzzle = () => {
             )}
             {!isSubmitted && showFinalConfirm && (
                 <FinalConfirmModal 
-                    onCancel={() => setShowFinalConfirm(false)}
-                    onContinue={handleSubmit}
-                    totalTime={formatTime(getTotalTime())}
+                    show={showFinalConfirm} 
+                    onClose={() => setShowFinalConfirm(false)}
+                    onConfirm={handleFinalConfirm}
                 />
             )}
         </div>
