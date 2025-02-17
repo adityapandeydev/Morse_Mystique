@@ -34,10 +34,10 @@ router.post("/register", async (req, res) => {
 
 /** Admin Login */
 router.post("/login", async (req, res) => {
-  const { name, password } = req.body;
+  const { email, password } = req.body;
 
   try {
-    const admin = await pool.query("SELECT * FROM admins WHERE name = $1", [name]);
+    const admin = await pool.query("SELECT * FROM admins WHERE email = $1", [email]);
 
     if (admin.rowCount === 0) {
       return res.status(401).json({ success: false, message: "Admin not found" });
@@ -48,9 +48,11 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
 
-    const token = jwt.sign({ adminId: admin.rows[0].id, name }, process.env.JWT_SECRET, {
-      expiresIn: "2h",
-    });
+    const token = jwt.sign(
+      { adminId: admin.rows[0].id, name: admin.rows[0].name }, 
+      process.env.JWT_SECRET, 
+      { expiresIn: "2h" }
+    );
 
     res.json({ success: true, token, message: "Login successful" });
   } catch (error) {
