@@ -6,6 +6,8 @@ import FinalConfirmModal from "./modals/FinalConfirmModal";
 
 const puzzles: Puzzle[] = Array(5).fill(null).map((_, i) => ({ id: i + 1 }));
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 // Network error handler
 const handleFetchError = (error: unknown, setMessage: (msg: string) => void) => {
     console.error("Network error:", error);
@@ -58,7 +60,7 @@ const MorseCodePuzzle = () => {
                 credentials: 'include' as const
             };
 
-            const response = await fetch("http://localhost:5000/api/user/submit-time", {
+            const response = await fetch(`${API_URL}/api/user/submit-time`, {
                 ...fetchConfig,
                 body: JSON.stringify({ 
                     email: userEmail,
@@ -100,7 +102,7 @@ const MorseCodePuzzle = () => {
                         credentials: 'include' as const
                     };
 
-                    const response = await fetch("http://localhost:5000/api/user/verify", {
+                    const response = await fetch(`${API_URL}/api/user/verify`, {
                         ...fetchConfig,
                         body: JSON.stringify({ email: userEmail, deviceID }),
                     });
@@ -229,7 +231,7 @@ const MorseCodePuzzle = () => {
                 credentials: 'include' as const
             };
 
-            const response = await fetch("http://localhost:5000/api/user/login", {
+            const response = await fetch(`${API_URL}/api/user/login`, {
                 ...fetchConfig,
                 body: JSON.stringify({ email, deviceID }),
             });
@@ -281,7 +283,7 @@ const MorseCodePuzzle = () => {
                 credentials: 'include' as const
             };
 
-            const response = await fetch("http://localhost:5000/api/user/check-answer", {
+            const response = await fetch(`${API_URL}/api/user/check-answer`, {
                 ...fetchConfig,
                 body: JSON.stringify({ 
                     index,

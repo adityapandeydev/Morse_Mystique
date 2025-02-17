@@ -9,9 +9,7 @@ const app = express();
 
 // Update CORS configuration to be more permissive in development
 const corsOptions = {
-    origin: process.env.NODE_ENV === 'production' 
-        ? process.env.FRONTEND_URL 
-        : '*',
+    origin: [process.env.FRONTEND_URL],
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
