@@ -142,18 +142,22 @@ const MorseCodePuzzle = () => {
         }
     }, [pausedTime, countdownTime, unlocked]);
 
-    // Then the useEffect that uses it
+    // Update the countdown timer effect
     useEffect(() => {
         let intervalId: number;
 
         if (isLoggedIn && !isSubmitted && countdownTime > 0) {
             intervalId = setInterval(() => {
                 setCountdownTime(prev => {
-                    if (prev <= 0) {
+                    const newTime = prev - 1;
+                    if (newTime <= 0) {
+                        // Auto submit when time runs out
+                        setPausedTime(0);
+                        localStorage.setItem("pausedTime", "0");
                         handleSubmit();
                         return 0;
                     }
-                    return prev - 1;
+                    return newTime;
                 });
             }, 1000);
         }
@@ -396,15 +400,35 @@ const MorseCodePuzzle = () => {
 
     // Update the first submit click handler
     const handleFirstSubmit = useCallback(() => {
-        setPausedTime(countdownTime);
+        // Don't store pausedTime yet, just show confirmation
         setShowFirstConfirm(true);
-    }, [countdownTime]);
+    }, []);
 
+    // Update handleFinalConfirm to handle both pausing and submission
     const handleFinalConfirm = useCallback(() => {
+        // Now store the paused time
+        setPausedTime(countdownTime);
+        localStorage.setItem("pausedTime", countdownTime.toString());
+        
         setShowFirstConfirm(false);
         setShowFinalConfirm(false);
         handleSubmit();
-    }, [handleSubmit]);
+    }, [countdownTime, handleSubmit]);
+
+    // Update the timer effect for puzzle progress
+    useEffect(() => {
+        if (isLoggedIn && !isSubmitted && !unlocked[0] && !currentPuzzleStartTime) {
+            setCurrentPuzzleStartTime(Date.now());
+            setIsTimerRunning(true);
+        }
+        
+        // Reset puzzle timer when moving to next unsolved puzzle
+        const currentUnsolved = unlocked.findIndex(u => !u);
+        if (currentUnsolved !== -1 && !isSubmitted && !showFinalConfirm) {
+            setCurrentPuzzleStartTime(Date.now());
+            setIsTimerRunning(true);
+        }
+    }, [isLoggedIn, isSubmitted, currentPuzzleStartTime, unlocked, showFinalConfirm]);
 
     if (!isLoggedIn) {
         return (
