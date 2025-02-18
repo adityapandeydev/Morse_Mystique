@@ -139,18 +139,19 @@ const MorseCodePuzzle = () => {
 
     // Update the countdown timer effect
     useEffect(() => {
+        let lastTick = Date.now();
         let intervalId: number;
 
         if (isLoggedIn && !isSubmitted && countdownTime > 0) {
             intervalId = setInterval(() => {
+                const now = Date.now();
+                const delta = Math.floor((now - lastTick) / 1000);
+                lastTick = now;
+
                 setCountdownTime(prev => {
-                    const newTime = prev - 1;
-                    if (newTime <= 0) {
-                        // Auto submit when time runs out
-                        setPausedTime(0);
-                        localStorage.setItem("pausedTime", "0");
+                    const newTime = Math.max(0, prev - delta); // Prevent negative values
+                    if (newTime === 0) {
                         handleSubmit();
-                        return 0;
                     }
                     return newTime;
                 });
@@ -305,16 +306,16 @@ const MorseCodePuzzle = () => {
         }
     }, [isLoggedIn, isSubmitted, currentPuzzleStartTime, unlocked]);
 
-    // Update timer effect
-    type Timeout = ReturnType<typeof setTimeout>;
+    // Update the puzzle timer effect
     useEffect(() => {
-        let intervalId: Timeout;
+        let intervalId: ReturnType<typeof setInterval>;
 
         if (isTimerRunning && currentPuzzleStartTime && !isSubmitted && !pausedTime) {
             intervalId = setInterval(() => {
-                const currentTime = Math.floor((Date.now() - currentPuzzleStartTime) / 1000);
-                setCurrentTimer(currentTime);
-            }, 1000);
+                const now = Date.now();
+                const elapsed = Math.floor((now - currentPuzzleStartTime) / 1000);
+                setCurrentTimer(elapsed);
+            }, 100); // More frequent updates for better accuracy
         }
 
         return () => {
