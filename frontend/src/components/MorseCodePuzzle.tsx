@@ -513,8 +513,13 @@ const MorseCodePuzzle = () => {
                     {/* Final time display or submit button */}
                     <div className="flex items-center justify-between w-full gap-4">
                         {isSubmitted && (
-                            <div className="w-full h-12 bg-blue-500 text-white font-bold rounded-md flex items-center justify-center">
-                                Final Time: {formatTime(finalTime ?? 0)}
+                            <div className="w-full flex flex-col items-center justify-center h-16 bg-gray-900 text-center rounded-md shadow-md font-mono border border-gray-700">
+                                <div className="text-lg font-bold text-green-400">
+                                    Final Time: {formatTime(finalTime ?? 0)}
+                                </div>
+                                <div className="text-sm text-gray-400">
+                                    Puzzles Solved: {unlocked.filter(Boolean).length}/5
+                                </div>
                             </div>
                         )}
                         {!isSubmitted && (showFirstConfirm || showFinalConfirm) && (

@@ -126,4 +126,49 @@ router.post("/add-user", authenticateAdmin, async (req, res) => {
   }
 });
 
+// Add this route to get registered users
+router.get("/registered-users", authenticateAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT email_id, added_by 
+             FROM registered_users 
+             ORDER BY email_id ASC`
+        );
+
+        res.json({
+            success: true,
+            users: result.rows
+        });
+    } catch (error) {
+        console.error("Error fetching registered users:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+// Update the users route to include remaining_time
+router.get("/users", authenticateAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT email_id, device_id, total_time, solved_count, 
+                    session_start, remaining_time
+             FROM users 
+             ORDER BY solved_count DESC, total_time ASC NULLS LAST`
+        );
+
+        res.json({
+            success: true,
+            users: result.rows
+        });
+    } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
 module.exports = router;

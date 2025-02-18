@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { UserData, RegisteredUser } from '../types';
+import { formatTime } from '../utils/formatters';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -22,6 +24,13 @@ export default function AdminDashboard() {
         email: "",
         password: ""
     });
+    const [users, setUsers] = useState<UserData[]>([]);
+    const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>([]);
+    const [showRegisteredUsers, setShowRegisteredUsers] = useState(false);
+    const [deleteMessage, setDeleteMessage] = useState("");
+    const [showAddUsers, setShowAddUsers] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Add reload warning
     useEffect(() => {
@@ -137,6 +146,106 @@ export default function AdminDashboard() {
         localStorage.removeItem("adminToken");
     };
 
+    const fetchUsers = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/admin/users`, {
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                // Sort users by solved_count (desc) and total_time (asc)
+                const sortedUsers = data.users.sort((a: UserData, b: UserData) => {
+                    if (b.solved_count !== a.solved_count) {
+                        return b.solved_count - a.solved_count;
+                    }
+                    return (a.total_time ?? Infinity) - (b.total_time ?? Infinity);
+                });
+                setUsers(sortedUsers);
+            }
+        } catch (error) {
+            console.error("Error fetching users:", error);
+        }
+    };
+
+    const fetchRegisteredUsers = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await fetch(`${API_URL}/api/admin/registered-users`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const data = await response.json();
+            console.log("Registered users response:", data);
+
+            if (data.success) {
+                setRegisteredUsers(data.users || []);
+            } else {
+                setError(data.message || "Failed to fetch registered users");
+            }
+        } catch (error) {
+            console.error("Error fetching registered users:", error);
+            setError("Failed to fetch registered users");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDeleteUser = async (email: string) => {
+        if (!window.confirm(`Are you sure you want to delete user: ${email}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/api/admin/delete-user`, {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ email })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                setDeleteMessage(`Successfully deleted user: ${email}`);
+                // Refresh user lists
+                fetchUsers();
+                fetchRegisteredUsers();
+            } else {
+                setDeleteMessage(`Failed to delete user: ${data.message}`);
+            }
+        } catch (error) {
+            console.error("Error deleting user:", error);
+            setDeleteMessage("Server error while deleting user");
+        }
+    };
+
+    // Add useEffect to fetch users on mount
+    useEffect(() => {
+        if (isLoggedIn) {
+            fetchUsers();
+            fetchRegisteredUsers();
+        }
+    }, [isLoggedIn, token]);
+
+    // Also update the useEffect to refetch when showRegisteredUsers changes
+    useEffect(() => {
+        if (isLoggedIn) {
+            if (showRegisteredUsers) {
+                fetchRegisteredUsers();
+            } else {
+                fetchUsers();
+            }
+        }
+    }, [isLoggedIn, token, showRegisteredUsers]);
+
     if (!isLoggedIn) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-6">
@@ -219,7 +328,21 @@ export default function AdminDashboard() {
 
     return (
         <div className="flex flex-col min-h-screen bg-gradient-to-r from-gray-900 to-black text-white">
-            <div className="p-4 flex justify-end">
+            <div className="p-4 flex justify-between items-center">
+                <div className="flex gap-4">
+                    <button
+                        onClick={() => setShowRegisteredUsers(!showRegisteredUsers)}
+                        className="px-4 py-2 bg-blue-500 hover:bg-blue-400 rounded-md"
+                    >
+                        {showRegisteredUsers ? 'View Users' : 'View Registered Users'}
+                    </button>
+                    <button
+                        onClick={() => setShowAddUsers(!showAddUsers)}
+                        className="px-4 py-2 bg-green-500 hover:bg-green-400 rounded-md"
+                    >
+                        {showAddUsers ? 'Hide Add Users' : 'Add Users'}
+                    </button>
+                </div>
                 <button
                     onClick={handleLogout}
                     className="px-4 py-2 bg-red-500 hover:bg-red-400 text-white font-bold rounded-md"
@@ -227,29 +350,97 @@ export default function AdminDashboard() {
                     Logout
                 </button>
             </div>
-            <div className="flex-1 flex flex-col items-center justify-center p-6">
-                <h1 className="text-4xl font-bold mb-6">Admin Dashboard</h1>
-                <div className="w-full max-w-lg p-6 bg-gray-800 rounded-lg shadow-lg">
-                    <h2 className="text-2xl font-semibold mb-4">Add Users</h2>
-                    <p className="text-gray-400 mb-4">Enter one email per line to add multiple users</p>
-                    <textarea
-                        className="w-full p-3 rounded-md bg-gray-700 text-white border border-gray-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-400 min-h-[200px] text-lg"
-                        placeholder="user1@example.com&#10;user2@example.com&#10;user3@example.com"
-                        value={emails}
-                        onChange={(e) => setEmails(e.target.value)}
-                    />
-                    <button
-                        className="mt-4 px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-md w-full"
-                        onClick={handleAddUsers}
-                    >
-                        Add Users
-                    </button>
-                    {addMessage && (
-                        <p className={`mt-4 text-center ${addMessage.includes("Error") ? "text-red-400" : "text-green-400"}`}>
-                            {addMessage}
+
+            <div className="flex-1 flex flex-col items-center p-6 gap-8">
+                <h1 className="text-4xl font-bold">Admin Dashboard</h1>
+                
+                {/* User Tables */}
+                <div className="w-full max-w-4xl p-6 bg-gray-800 rounded-lg shadow-lg">
+                    <h2 className="text-2xl font-semibold mb-4">
+                        {showRegisteredUsers ? 'Registered Users' : 'Active Users'}
+                    </h2>
+                    {isLoading ? (
+                        <div className="text-center py-4">Loading...</div>
+                    ) : error ? (
+                        <div className="text-red-400 text-center py-4">{error}</div>
+                    ) : (showRegisteredUsers ? registeredUsers : users).length === 0 ? (
+                        <div className="text-center py-4">No users found</div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="border-b border-gray-700">
+                                        <th className="p-2">Email</th>
+                                        {showRegisteredUsers ? (
+                                            <th className="p-2">Added By</th>
+                                        ) : (
+                                            <>
+                                                <th className="p-2">Solved</th>
+                                                <th className="p-2">Time</th>
+                                                <th className="p-2">Remaining</th>
+                                            </>
+                                        )}
+                                        <th className="p-2">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(showRegisteredUsers ? registeredUsers : users).map((user: any) => (
+                                        <tr key={user.email_id} className="border-b border-gray-700">
+                                            <td className="p-2">{user.email_id}</td>
+                                            {showRegisteredUsers ? (
+                                                <td className="p-2">{user.added_by}</td>
+                                            ) : (
+                                                <>
+                                                    <td className="p-2">{user.solved_count}/5</td>
+                                                    <td className="p-2">{user.total_time ? formatTime(user.total_time) : '-'}</td>
+                                                    <td className="p-2">{user.remaining_time ? formatTime(user.remaining_time) : '-'}</td>
+                                                </>
+                                            )}
+                                            <td className="p-2">
+                                                <button
+                                                    onClick={() => handleDeleteUser(user.email_id)}
+                                                    className="px-3 py-1 bg-red-500 hover:bg-red-400 rounded-md"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                    {deleteMessage && (
+                        <p className={`mt-4 text-center ${deleteMessage.includes("Successfully") ? "text-green-400" : "text-red-400"}`}>
+                            {deleteMessage}
                         </p>
                     )}
                 </div>
+
+                {/* Add Users Section - Only show when toggled */}
+                {showAddUsers && (
+                    <div className="w-full max-w-lg p-6 bg-gray-800 rounded-lg shadow-lg">
+                        <h2 className="text-2xl font-semibold mb-4">Add Users</h2>
+                        <p className="text-gray-400 mb-4">Enter one email per line to add multiple users</p>
+                        <textarea
+                            className="w-full p-3 rounded-md bg-gray-700 text-white border border-gray-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-400 min-h-[200px] text-lg"
+                            placeholder="user1@example.com&#10;user2@example.com&#10;user3@example.com"
+                            value={emails}
+                            onChange={(e) => setEmails(e.target.value)}
+                        />
+                        <button
+                            className="mt-4 px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-md w-full"
+                            onClick={handleAddUsers}
+                        >
+                            Add Users
+                        </button>
+                        {addMessage && (
+                            <p className={`mt-4 text-center ${addMessage.includes("Error") ? "text-red-400" : "text-green-400"}`}>
+                                {addMessage}
+                            </p>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
