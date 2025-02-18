@@ -79,6 +79,9 @@ const MorseCodePuzzle = () => {
     // Add new state for answer set
     const [answerSet, setAnswerSet] = useState<string | null>(null);
 
+    // Add this state at the top with other states
+    const [timerStartTime, setTimerStartTime] = useState(() => Date.now());
+
     // Generate deviceID once and store it
     useEffect(() => {
         if (!localStorage.getItem("deviceID")) {
@@ -139,29 +142,32 @@ const MorseCodePuzzle = () => {
 
     // Update the countdown timer effect
     useEffect(() => {
-        let lastTick = Date.now();
         let intervalId: number;
 
         if (isLoggedIn && !isSubmitted && countdownTime > 0) {
-            intervalId = setInterval(() => {
+            const updateTimer = () => {
                 const now = Date.now();
-                const delta = Math.floor((now - lastTick) / 1000);
-                lastTick = now;
+                const elapsedSeconds = Math.floor((now - timerStartTime) / 1000);
+                const newTime = Math.max(0, 60 - elapsedSeconds); // Assuming 60 seconds total
 
-                setCountdownTime(prev => {
-                    const newTime = Math.max(0, prev - delta); // Prevent negative values
-                    if (newTime === 0) {
-                        handleSubmit();
-                    }
-                    return newTime;
-                });
-            }, 1000);
+                setCountdownTime(newTime);
+
+                if (newTime === 0) {
+                    handleSubmit();
+                }
+            };
+
+            // Initial update
+            updateTimer();
+            
+            // Update every 100ms for smoother countdown
+            intervalId = setInterval(updateTimer, 100);
         }
 
         return () => {
             if (intervalId) clearInterval(intervalId);
         };
-    }, [isLoggedIn, isSubmitted, countdownTime, handleSubmit]);
+    }, [isLoggedIn, isSubmitted, timerStartTime, handleSubmit]);
 
     // Update login handler to clear all stored times
     const handleLogin = useCallback(async () => {
@@ -190,6 +196,7 @@ const MorseCodePuzzle = () => {
                 setFinalTime(null);
                 setPausedTime(null);
                 
+                setTimerStartTime(Date.now());
                 setCountdownTime(data.sessionTimeout);
                 setIsLoggedIn(true);
                 setUserInputs(Array(5).fill(""));
@@ -261,6 +268,9 @@ const MorseCodePuzzle = () => {
                     }
                     setCountdownTime(data.timeRemaining);
                 } else {
+                    // Calculate and set the timer start time based on remaining time
+                    const now = Date.now();
+                    setTimerStartTime(now - ((60 - data.timeRemaining) * 1000));
                     setCountdownTime(data.timeRemaining);
                 }
 
