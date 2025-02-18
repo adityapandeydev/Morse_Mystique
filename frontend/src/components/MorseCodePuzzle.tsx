@@ -82,6 +82,11 @@ const MorseCodePuzzle = () => {
     // Add this state at the top with other states
     const [timerStartTime, setTimerStartTime] = useState(() => Date.now());
 
+    // Add this state to store initial timeout
+    const [initialTimeout, setInitialTimeout] = useState(() => {
+        return parseInt(localStorage.getItem("initialTimeout") ?? "60");
+    });
+
     // Generate deviceID once and store it
     useEffect(() => {
         if (!localStorage.getItem("deviceID")) {
@@ -148,7 +153,7 @@ const MorseCodePuzzle = () => {
             const updateTimer = () => {
                 const now = Date.now();
                 const elapsedSeconds = Math.floor((now - timerStartTime) / 1000);
-                const newTime = Math.max(0, 60 - elapsedSeconds); // Assuming 60 seconds total
+                const newTime = Math.max(0, initialTimeout - elapsedSeconds); // Use initialTimeout instead of 60
 
                 setCountdownTime(newTime);
 
@@ -167,7 +172,7 @@ const MorseCodePuzzle = () => {
         return () => {
             if (intervalId) clearInterval(intervalId);
         };
-    }, [isLoggedIn, isSubmitted, timerStartTime, handleSubmit]);
+    }, [isLoggedIn, isSubmitted, timerStartTime, handleSubmit, initialTimeout]);
 
     // Update login handler to clear all stored times
     const handleLogin = useCallback(async () => {
@@ -196,6 +201,8 @@ const MorseCodePuzzle = () => {
                 setFinalTime(null);
                 setPausedTime(null);
                 
+                setInitialTimeout(data.sessionTimeout);
+                localStorage.setItem("initialTimeout", data.sessionTimeout.toString());
                 setTimerStartTime(Date.now());
                 setCountdownTime(data.sessionTimeout);
                 setIsLoggedIn(true);
