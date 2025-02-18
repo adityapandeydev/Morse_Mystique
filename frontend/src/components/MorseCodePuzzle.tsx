@@ -98,52 +98,44 @@ const MorseCodePuzzle = () => {
 
     // Update handleSubmit
     const handleSubmit = useCallback(async () => {
-        const finalCountdown = pausedTime ?? countdownTime;
-        const totalTime = 60 - finalCountdown;
-        const userEmail = localStorage.getItem("userEmail");
-        const solvedCount = unlocked.filter(Boolean).length;
-
-        if (!userEmail) {
-            console.error("Missing email");
-            return;
-        }
-
-        const submitData = {
-            email: userEmail,
-            totalTime: Math.max(0, totalTime),
-            solvedCount: solvedCount,
-            remainingTime: finalCountdown
-        };
-
         try {
+            const solvedCount = unlocked.filter(Boolean).length;
+            const email = localStorage.getItem("userEmail");
+            const totalTime = getTotalTime();
+
             const response = await fetch(`${API_URL}/api/user/submit-time`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
+                headers: {
+                    'Content-Type': 'application/json'
                 },
-                credentials: 'include',
-                body: JSON.stringify(submitData)
+                body: JSON.stringify({
+                    email,
+                    totalTime,
+                    solvedCount,
+                    remainingTime: countdownTime
+                })
             });
 
             const data = await response.json();
             if (data.success) {
                 setIsSubmitted(true);
-                setIsTimerRunning(false);
                 setFinalTime(totalTime);
-                setPausedTime(finalCountdown);
+                setPausedTime(countdownTime);
                 localStorage.setItem("finalTime", totalTime.toString());
-                localStorage.setItem("pausedTime", finalCountdown.toString());
-                setShowFirstConfirm(false);
-                setShowFinalConfirm(false);
-                setCurrentPuzzleStartTime(null);
-                setCurrentTimer(0);
+                localStorage.setItem("pausedTime", countdownTime.toString());
+                localStorage.setItem("isSubmitted", "true");
             }
         } catch (error) {
             console.error("Submit error:", error);
-            handleFetchError(error, () => {});
         }
-    }, [pausedTime, countdownTime, unlocked]);
+    }, [unlocked, getTotalTime, countdownTime, setIsSubmitted]);
+
+    // Update auto-submit in useEffect
+    useEffect(() => {
+        if (!isSubmitted && countdownTime <= 0) {
+            handleSubmit();
+        }
+    }, [countdownTime, isSubmitted, handleSubmit]);
 
     // Update the countdown timer effect
     useEffect(() => {
@@ -406,7 +398,7 @@ const MorseCodePuzzle = () => {
         } catch (error) {
             handleFetchError(error, () => {});
         }
-    }, [countdownTime, timers, unlocked, currentTimer, userInputs, setTimers, setUnlocked, setPuzzleData]);
+    }, [countdownTime, timers, unlocked, currentTimer, userInputs, setTimers, setUnlocked, setPuzzleData, setCurrentTimer, setUserInputs]);
 
     // Update the first submit click handler
     const handleFirstSubmit = useCallback(() => {
@@ -473,7 +465,7 @@ const MorseCodePuzzle = () => {
                         {formatCountdown(isSubmitted ? (pausedTime ?? countdownTime) : countdownTime)}
                     </div>
                     <div className="text-sm text-gray-400">
-                        {isSubmitted ? "Time Remaining" : "Time Remaining"}
+                        Time Remaining
                     </div>
                 </div>
             </div>

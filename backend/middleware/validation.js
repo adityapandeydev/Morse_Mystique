@@ -3,7 +3,7 @@ const { validateEmail } = require('../utils/validators');
 const validateRequest = (requiredFields) => (req, res, next) => {
     // Check required fields exist
     for (const field of requiredFields) {
-        if (!req.body[field]) {
+        if (req.body[field] === undefined) {
             return res.status(400).json({
                 success: false,
                 message: `Missing required field: ${field}`
@@ -24,6 +24,6 @@ const validateRequest = (requiredFields) => (req, res, next) => {
 
 module.exports = {
     validateLoginRequest: validateRequest(['email', 'deviceID']),
-    validateSubmitRequest: validateRequest(['email', 'totalTime', 'solvedCount']),
+    validateSubmitRequest: validateRequest(['email', 'totalTime', 'solvedCount', 'remainingTime']),
     validateVerifyRequest: validateRequest(['email', 'deviceID'])
 }; 
