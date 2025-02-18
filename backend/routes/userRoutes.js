@@ -126,7 +126,11 @@ router.post("/check-answer", validateCheckAnswer, async (req, res) => {
         const answerSet = user.rows[0].answer_set;
         const correctAnswer = answerSets[answerSet][index];
 
-        const isCorrect = answer.toUpperCase() === correctAnswer;
+        // Ensure both are uppercase and trimmed for comparison
+        const normalizedAnswer = answer.trim().toUpperCase();
+        const normalizedCorrect = correctAnswer.trim().toUpperCase();
+
+        const isCorrect = normalizedAnswer === normalizedCorrect;
         
         if (isCorrect) {
             // Update solved count
@@ -135,6 +139,15 @@ router.post("/check-answer", validateCheckAnswer, async (req, res) => {
                 [index + 1, email]
             );
         }
+
+        // Log the comparison for debugging
+        console.log({
+            userAnswer: normalizedAnswer,
+            correctAnswer: normalizedCorrect,
+            answerSet,
+            index,
+            isCorrect
+        });
 
         res.json({
             success: true,

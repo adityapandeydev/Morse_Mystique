@@ -1,37 +1,18 @@
 const { validateEmail } = require('../utils/validators');
 
-// Separate validation for different endpoints
-const validateLoginRequest = (req, res, next) => {
-    const { email, deviceID } = req.body;
-    
-    if (!email || !deviceID) {
-        return res.status(400).json({
-            success: false,
-            message: "Missing required fields"
-        });
+const validateRequest = (requiredFields) => (req, res, next) => {
+    // Check required fields exist
+    for (const field of requiredFields) {
+        if (!req.body[field]) {
+            return res.status(400).json({
+                success: false,
+                message: `Missing required field: ${field}`
+            });
+        }
     }
 
-    if (!validateEmail(email)) {
-        return res.status(400).json({
-            success: false,
-            message: "Invalid email format"
-        });
-    }
-
-    next();
-};
-
-const validateSubmitRequest = (req, res, next) => {
-    const { email, totalTime, solvedCount } = req.body;
-
-    if (!email || totalTime === undefined || solvedCount === undefined) {
-        return res.status(400).json({
-            success: false,
-            message: "Missing required fields"
-        });
-    }
-
-    if (!validateEmail(email)) {
+    // Validate email if it's required
+    if (requiredFields.includes('email') && !validateEmail(req.body.email)) {
         return res.status(400).json({
             success: false,
             message: "Invalid email format"
@@ -41,28 +22,8 @@ const validateSubmitRequest = (req, res, next) => {
     next();
 };
 
-const validateVerifyRequest = (req, res, next) => {
-    const { email, deviceID } = req.body;
-    
-    if (!email || !deviceID) {
-        return res.status(400).json({
-            success: false,
-            message: "Missing required fields"
-        });
-    }
-
-    if (!validateEmail(email)) {
-        return res.status(400).json({
-            success: false,
-            message: "Invalid email format"
-        });
-    }
-
-    next();
-};
-
-module.exports = { 
-    validateLoginRequest,
-    validateSubmitRequest,
-    validateVerifyRequest
+module.exports = {
+    validateLoginRequest: validateRequest(['email', 'deviceID']),
+    validateSubmitRequest: validateRequest(['email', 'totalTime', 'solvedCount']),
+    validateVerifyRequest: validateRequest(['email', 'deviceID'])
 }; 
