@@ -171,4 +171,60 @@ router.get("/users", authenticateAdmin, async (req, res) => {
     }
 });
 
+/** Delete User */
+router.delete("/delete-user", authenticateAdmin, async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        // Start a transaction
+        await pool.query('BEGIN');
+
+        try {
+            // First check if user exists in users table
+            const activeUser = await pool.query(
+                "SELECT * FROM users WHERE email_id = $1",
+                [email]
+            );
+
+            if (activeUser.rows.length > 0) {
+                // If user is active, only delete from users table
+                await pool.query(
+                    "DELETE FROM users WHERE email_id = $1",
+                    [email]
+                );
+            } else {
+                // If user is not active, delete from registered_users
+                const result = await pool.query(
+                    "DELETE FROM registered_users WHERE email_id = $1",
+                    [email]
+                );
+
+                if (result.rowCount === 0) {
+                    await pool.query('ROLLBACK');
+                    return res.status(404).json({
+                        success: false,
+                        message: "User not found"
+                    });
+                }
+            }
+
+            await pool.query('COMMIT');
+
+            res.json({
+                success: true,
+                message: "User deleted successfully"
+            });
+        } catch (err) {
+            await pool.query('ROLLBACK');
+            throw err;
+        }
+    } catch (error) {
+        console.error("Delete user error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Error deleting user: " + error.message
+        });
+    }
+});
+
 module.exports = router;

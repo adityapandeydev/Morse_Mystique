@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { UserData, RegisteredUser } from '../types';
 import { formatTime } from '../utils/formatters';
 
@@ -146,7 +146,8 @@ export default function AdminDashboard() {
         localStorage.removeItem("adminToken");
     };
 
-    const fetchUsers = async () => {
+    // Wrap fetch functions with useCallback
+    const fetchUsers = useCallback(async () => {
         try {
             const response = await fetch(`${API_URL}/api/admin/users`, {
                 headers: {
@@ -155,7 +156,6 @@ export default function AdminDashboard() {
             });
             const data = await response.json();
             if (data.success) {
-                // Sort users by solved_count (desc) and total_time (asc)
                 const sortedUsers = data.users.sort((a: UserData, b: UserData) => {
                     if (b.solved_count !== a.solved_count) {
                         return b.solved_count - a.solved_count;
@@ -167,9 +167,9 @@ export default function AdminDashboard() {
         } catch (error) {
             console.error("Error fetching users:", error);
         }
-    };
+    }, [token]);
 
-    const fetchRegisteredUsers = async () => {
+    const fetchRegisteredUsers = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
@@ -182,8 +182,6 @@ export default function AdminDashboard() {
             });
 
             const data = await response.json();
-            console.log("Registered users response:", data);
-
             if (data.success) {
                 setRegisteredUsers(data.users || []);
             } else {
@@ -195,7 +193,18 @@ export default function AdminDashboard() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [token]);
+
+    // Update useEffect to only run on mount and login state change
+    useEffect(() => {
+        if (isLoggedIn) {
+            if (showRegisteredUsers) {
+                fetchRegisteredUsers();
+            } else {
+                fetchUsers();
+            }
+        }
+    }, [isLoggedIn, showRegisteredUsers, fetchRegisteredUsers, fetchUsers]);
 
     const handleDeleteUser = async (email: string) => {
         if (!window.confirm(`Are you sure you want to delete user: ${email}?`)) {
@@ -213,13 +222,14 @@ export default function AdminDashboard() {
             });
 
             const data = await response.json();
+            
             if (data.success) {
                 setDeleteMessage(`Successfully deleted user: ${email}`);
                 // Refresh user lists
                 fetchUsers();
                 fetchRegisteredUsers();
             } else {
-                setDeleteMessage(`Failed to delete user: ${data.message}`);
+                setDeleteMessage(data.message || "Failed to delete user");
             }
         } catch (error) {
             console.error("Error deleting user:", error);
@@ -227,24 +237,73 @@ export default function AdminDashboard() {
         }
     };
 
-    // Add useEffect to fetch users on mount
-    useEffect(() => {
-        if (isLoggedIn) {
-            fetchUsers();
-            fetchRegisteredUsers();
+    // Add this helper function to determine what to render
+    const renderTableContent = (
+        isLoading: boolean, 
+        error: string | null, 
+        showRegisteredUsers: boolean, 
+        users: UserData[], 
+        registeredUsers: RegisteredUser[]
+    ) => {
+        if (isLoading) {
+            return <div className="text-center py-4">Loading...</div>;
         }
-    }, [isLoggedIn, token]);
+        
+        if (error) {
+            return <div className="text-red-400 text-center py-4">{error}</div>;
+        }
 
-    // Also update the useEffect to refetch when showRegisteredUsers changes
-    useEffect(() => {
-        if (isLoggedIn) {
-            if (showRegisteredUsers) {
-                fetchRegisteredUsers();
-            } else {
-                fetchUsers();
-            }
+        const currentData = showRegisteredUsers ? registeredUsers : users;
+        if (currentData.length === 0) {
+            return <div className="text-center py-4">No users found</div>;
         }
-    }, [isLoggedIn, token, showRegisteredUsers]);
+
+        return (
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead>
+                        <tr className="border-b border-gray-700">
+                            <th className="p-2">Email</th>
+                            {showRegisteredUsers ? (
+                                <th className="p-2">Added By</th>
+                            ) : (
+                                <>
+                                    <th className="p-2">Solved</th>
+                                    <th className="p-2">Time</th>
+                                    <th className="p-2">Remaining</th>
+                                </>
+                            )}
+                            <th className="p-2">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {(currentData as (UserData | RegisteredUser)[]).map((user) => (
+                            <tr key={user.email_id} className="border-b border-gray-700">
+                                <td className="p-2">{user.email_id}</td>
+                                {showRegisteredUsers ? (
+                                    <td className="p-2">{(user as RegisteredUser).added_by}</td>
+                                ) : (
+                                    <>
+                                        <td className="p-2">{(user as UserData).solved_count}/5</td>
+                                        <td className="p-2">{(user as UserData).total_time ? formatTime((user as UserData).total_time!) : '-'}</td>
+                                        <td className="p-2">{(user as UserData).remaining_time ? formatTime((user as UserData).remaining_time!) : '-'}</td>
+                                    </>
+                                )}
+                                <td className="p-2">
+                                    <button
+                                        onClick={() => handleDeleteUser(user.email_id)}
+                                        className="px-3 py-1 bg-red-500 hover:bg-red-400 rounded-md"
+                                    >
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
 
     if (!isLoggedIn) {
         return (
@@ -359,57 +418,7 @@ export default function AdminDashboard() {
                     <h2 className="text-2xl font-semibold mb-4">
                         {showRegisteredUsers ? 'Registered Users' : 'Active Users'}
                     </h2>
-                    {isLoading ? (
-                        <div className="text-center py-4">Loading...</div>
-                    ) : error ? (
-                        <div className="text-red-400 text-center py-4">{error}</div>
-                    ) : (showRegisteredUsers ? registeredUsers : users).length === 0 ? (
-                        <div className="text-center py-4">No users found</div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr className="border-b border-gray-700">
-                                        <th className="p-2">Email</th>
-                                        {showRegisteredUsers ? (
-                                            <th className="p-2">Added By</th>
-                                        ) : (
-                                            <>
-                                                <th className="p-2">Solved</th>
-                                                <th className="p-2">Time</th>
-                                                <th className="p-2">Remaining</th>
-                                            </>
-                                        )}
-                                        <th className="p-2">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {(showRegisteredUsers ? registeredUsers : users).map((user: any) => (
-                                        <tr key={user.email_id} className="border-b border-gray-700">
-                                            <td className="p-2">{user.email_id}</td>
-                                            {showRegisteredUsers ? (
-                                                <td className="p-2">{user.added_by}</td>
-                                            ) : (
-                                                <>
-                                                    <td className="p-2">{user.solved_count}/5</td>
-                                                    <td className="p-2">{user.total_time ? formatTime(user.total_time) : '-'}</td>
-                                                    <td className="p-2">{user.remaining_time ? formatTime(user.remaining_time) : '-'}</td>
-                                                </>
-                                            )}
-                                            <td className="p-2">
-                                                <button
-                                                    onClick={() => handleDeleteUser(user.email_id)}
-                                                    className="px-3 py-1 bg-red-500 hover:bg-red-400 rounded-md"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                    {renderTableContent(isLoading, error, showRegisteredUsers, users, registeredUsers)}
                     {deleteMessage && (
                         <p className={`mt-4 text-center ${deleteMessage.includes("Successfully") ? "text-green-400" : "text-red-400"}`}>
                             {deleteMessage}

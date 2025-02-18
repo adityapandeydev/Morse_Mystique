@@ -1,6 +1,6 @@
 const express = require("express");
 const rateLimit = require('express-rate-limit');
-const { puzzleLinks, answers } = require('../config/puzzleData');
+const { puzzleLinks, answers, answerSets, getRandomSet } = require('../config/puzzleData');
 const { validateLoginRequest, validateSubmitRequest, validateVerifyRequest } = require('../middleware/validation');
 const pool = require("../config/db");
 const { validateEmail } = require('../utils/validators');
@@ -23,47 +23,27 @@ const handleServerError = (error, res) => {
 /** User Login */
 router.post("/login", loginLimiter, validateLoginRequest, async (req, res) => {
     const { email, deviceID } = req.body;
+    const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT);
 
     if (!validateEmail(email)) {
         return res.status(400).json({ success: false, message: "Invalid email format" });
     }
 
     try {
-        // Check if user is registered
-        const registeredUser = await pool.query(
-            "SELECT * FROM registered_users WHERE email_id = $1",
-            [email]
+        // Assign a random answer set
+        const answerSet = getRandomSet();
+        
+        const result = await pool.query(
+            `INSERT INTO users (email_id, device_id, session_start, answer_set) 
+             VALUES ($1, $2, NOW(), $3) 
+             RETURNING *`,
+            [email, deviceID, answerSet]
         );
 
-        if (registeredUser.rowCount === 0) {
-            return res.status(403).json({ success: false, message: "User not registered" });
-        }
-
-        // Check if user already exists in users table
-        const user = await pool.query("SELECT * FROM users WHERE email_id = $1", [email]);
-
-        if (user.rowCount > 0) {
-            // Verify device ID
-            if (user.rows[0].device_id !== deviceID) {
-                return res.status(403).json({ success: false, message: "Unauthorized device" });
-            }
-        } else {
-            // First-time login, store device ID
-            await pool.query(
-                "INSERT INTO users (email_id, device_id) VALUES ($1, $2)",
-                [email, deviceID]
-            );
-        }
-
-        // Set session start time in database
-        await pool.query(
-            "UPDATE users SET session_start = NOW() WHERE email_id = $1",
-            [email]
-        );
-
-        res.json({ 
+        res.json({
             success: true,
-            sessionTimeout: parseInt(process.env.SESSION_TIMEOUT)
+            sessionTimeout,
+            answerSet // Send the assigned set to frontend
         });
     } catch (error) {
         handleServerError(error, res);
@@ -101,53 +81,73 @@ router.get("/puzzle/:index", async (req, res) => {
     });
 });
 
-/** Check Answer */
-router.post("/check-answer", async (req, res) => {
+// Add validateCheckAnswer middleware
+const validateCheckAnswer = (req, res, next) => {
     const { index, answer, email } = req.body;
     
-    if (!email || index < 0 || index >= answers.length || typeof answer !== 'string') {
-        return res.status(400).json({ success: false, message: "Invalid input" });
+    if (!email || index === undefined || !answer) {
+        return res.status(400).json({
+            success: false,
+            message: "Missing required fields"
+        });
     }
 
+    if (!validateEmail(email)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid email format"
+        });
+    }
+
+    if (index < 0 || index > 4) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid puzzle index"
+        });
+    }
+
+    next();
+};
+
+/** Check Answer */
+router.post("/check-answer", validateCheckAnswer, async (req, res) => {
+    const { index, answer, email } = req.body;
+
     try {
-        // Verify puzzle sequence
+        // Get user's answer set
         const user = await pool.query(
-            "SELECT solved_count FROM users WHERE email_id = $1",
+            "SELECT answer_set FROM users WHERE email_id = $1",
             [email]
         );
 
-        // Handle case where user isn't found
-        if (user.rowCount === 0) {
-            return res.status(400).json({
-                success: false,
-                message: "User not found"
-            });
+        if (user.rows.length === 0) {
+            return res.json({ success: false, message: "User not found" });
         }
 
-        if (index > user.rows[0].solved_count) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid puzzle sequence"
-            });
-        }
+        const answerSet = user.rows[0].answer_set;
+        const correctAnswer = answerSets[answerSet][index];
 
-        const isCorrect = answers[index] === answer.toUpperCase();
+        const isCorrect = answer.toUpperCase() === correctAnswer;
         
         if (isCorrect) {
-            // Update solved count in database
+            // Update solved count
             await pool.query(
-                "UPDATE users SET solved_count = $1 WHERE email_id = $2 AND solved_count < $1",
+                "UPDATE users SET solved_count = GREATEST(solved_count, $1) WHERE email_id = $2",
                 [index + 1, email]
             );
         }
 
-        res.json({ 
+        res.json({
             success: true,
             isCorrect,
             next: isCorrect ? puzzleLinks[index] : null
         });
     } catch (error) {
-        handleServerError(error, res);
+        console.error("Check answer error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
     }
 });
 

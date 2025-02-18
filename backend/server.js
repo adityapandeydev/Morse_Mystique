@@ -4,19 +4,23 @@ const cors = require("cors");
 
 const app = express();
 
-// Simplified CORS configuration
-const corsOptions = {
-    origin: ['https://morse-mystique.vercel.app', 'http://localhost:5173'],
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-};
+// Update CORS configuration
+app.use(cors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));
 
-app.use(cors(corsOptions));
 app.use(express.json());
 
 // Add OPTIONS handling for preflight requests
-app.options('*', cors(corsOptions));
+app.options('*', cors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));
 
 // Routes
 const adminRoutes = require("./routes/adminRoutes");

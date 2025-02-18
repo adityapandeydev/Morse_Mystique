@@ -76,6 +76,9 @@ const MorseCodePuzzle = () => {
         return saved ? parseInt(saved) : null;
     });
 
+    // Add new state for answer set
+    const [answerSet, setAnswerSet] = useState<string | null>(null);
+
     // Generate deviceID once and store it
     useEffect(() => {
         if (!localStorage.getItem("deviceID")) {
@@ -211,6 +214,10 @@ const MorseCodePuzzle = () => {
                 localStorage.setItem("unlockedPuzzles", JSON.stringify(Array(5).fill(false)));
                 localStorage.setItem("puzzleTimers", JSON.stringify(Array(5).fill(0)));
                 localStorage.removeItem("isSubmitted");
+
+                // Update answer set
+                setAnswerSet(data.answerSet);
+                localStorage.setItem("answerSet", data.answerSet);
             } else {
                 setLoginMessage("Login denied: " + data.message);
             }
@@ -263,6 +270,9 @@ const MorseCodePuzzle = () => {
                 } else {
                     setCountdownTime(data.timeRemaining);
                 }
+
+                // Update answer set
+                setAnswerSet(localStorage.getItem("answerSet"));
             } catch (error) {
                 console.error("Session verification error:", error);
                 // Don't clear storage on network errors
@@ -467,6 +477,15 @@ const MorseCodePuzzle = () => {
                     </div>
                 </div>
             </div>
+            
+            {/* Add this below the countdown timer */}
+            {answerSet && (
+                <div className="text-center mb-4">
+                    <span className="px-3 py-1 bg-gray-800 rounded-full text-sm font-mono">
+                        Set {answerSet}
+                    </span>
+                </div>
+            )}
             
             <div className="flex-1 flex flex-col items-center justify-center p-6">
                 <h1 className="text-4xl font-bold mb-6 tracking-widest">Morse Code Puzzle</h1>

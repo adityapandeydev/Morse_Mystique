@@ -19,7 +19,6 @@ export interface UserData {
     device_id: string;
     total_time: number | null;
     solved_count: number;
-    session_start: string;
     remaining_time: number | null;
 }
 
