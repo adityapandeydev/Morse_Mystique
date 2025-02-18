@@ -192,28 +192,25 @@ router.delete("/delete-user", authenticateAdmin, async (req, res) => {
                     "DELETE FROM users WHERE email_id = $1",
                     [email]
                 );
-            } else {
-                // If user is not active, delete from registered_users
-                const result = await pool.query(
-                    "DELETE FROM registered_users WHERE email_id = $1",
-                    [email]
-                );
-
-                if (result.rowCount === 0) {
-                    await pool.query('ROLLBACK');
-                    return res.status(404).json({
-                        success: false,
-                        message: "User not found"
-                    });
-                }
+                await pool.query('COMMIT');
+                return res.json({
+                    success: true,
+                    message: "Active user deleted successfully"
+                });
             }
 
-            await pool.query('COMMIT');
+            // If user is not active, try to delete from registered_users
+            await pool.query(
+                "DELETE FROM registered_users WHERE email_id = $1",
+                [email]
+            );
 
+            await pool.query('COMMIT');
             res.json({
                 success: true,
-                message: "User deleted successfully"
+                message: "Registered user deleted successfully"
             });
+
         } catch (err) {
             await pool.query('ROLLBACK');
             throw err;

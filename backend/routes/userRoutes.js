@@ -33,10 +33,9 @@ router.post("/login", loginLimiter, validateLoginRequest, async (req, res) => {
         // Assign a random answer set
         const answerSet = getRandomSet();
         
-        const result = await pool.query(
+        await pool.query(
             `INSERT INTO users (email_id, device_id, session_start, answer_set) 
-             VALUES ($1, $2, NOW(), $3) 
-             RETURNING *`,
+             VALUES ($1, $2, NOW(), $3)`,
             [email, deviceID, answerSet]
         );
 
