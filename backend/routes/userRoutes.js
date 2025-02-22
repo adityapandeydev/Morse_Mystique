@@ -30,7 +30,40 @@ router.post("/login", loginLimiter, validateLoginRequest, async (req, res) => {
     }
 
     try {
-        // Use the provided set instead of random
+        // First check if user is registered
+        const registeredUser = await pool.query(
+            "SELECT * FROM registered_users WHERE email_id = $1",
+            [email]
+        );
+
+        if (registeredUser.rows.length === 0) {
+            return res.status(403).json({ 
+                success: false, 
+                message: "User not registered for the event" 
+            });
+        }
+
+        // Check if user already has an active session
+        const existingSession = await pool.query(
+            "SELECT * FROM users WHERE email_id = $1",
+            [email]
+        );
+
+        if (existingSession.rows.length > 0) {
+            // If session exists, update device ID and return existing set
+            await pool.query(
+                "UPDATE users SET device_id = $1 WHERE email_id = $2",
+                [deviceID, email]
+            );
+
+            return res.json({
+                success: true,
+                sessionTimeout,
+                answerSet: existingSession.rows[0].answer_set
+            });
+        }
+
+        // Create new session
         const result = await pool.query(
             `INSERT INTO users (email_id, device_id, session_start, answer_set) 
              VALUES ($1, $2, NOW(), $3) 
