@@ -50,12 +50,15 @@ router.post("/login", loginLimiter, validateLoginRequest, async (req, res) => {
         );
 
         if (existingSession.rows.length > 0) {
-            // If session exists, update device ID and return existing set
-            await pool.query(
-                "UPDATE users SET device_id = $1 WHERE email_id = $2",
-                [deviceID, email]
-            );
+            // If session exists with different device ID, reject the login
+            if (existingSession.rows[0].device_id !== deviceID) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Session already active on another device"
+                });
+            }
 
+            // If same device, allow login and return existing set
             return res.json({
                 success: true,
                 sessionTimeout,
@@ -161,7 +164,7 @@ router.post("/check-answer", validateCheckAnswer, async (req, res) => {
         if (!answerSets[answerSet] || !answerSets[answerSet][index]) {
             console.error('Invalid answer set or index:', { answerSet, index });
             return res.json({ 
-                success: false, 
+                success: false,
                 message: "Invalid answer set configuration" 
             });
         }
