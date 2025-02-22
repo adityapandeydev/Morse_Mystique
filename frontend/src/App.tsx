@@ -1,15 +1,16 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import MorseCodePuzzle from "./components/MorseCodePuzzle";
-import AdminDashboard from "./components/AdminDashboard";
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import MorseCodePuzzle from './components/MorseCodePuzzle';
+import AdminDashboard from './components/AdminDashboard';
 
 function App() {
   return (
-    <Router>
+    <BrowserRouter>
       <Routes>
-        <Route path="/" element={<MorseCodePuzzle />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/set/:setId" element={<MorseCodePuzzle />} />
+        <Route path="*" element={<Navigate to="/set/A" replace />} />
       </Routes>
-    </Router>
+    </BrowserRouter>
   );
 }
 

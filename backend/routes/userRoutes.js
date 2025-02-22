@@ -22,7 +22,7 @@ const handleServerError = (error, res) => {
 
 /** User Login */
 router.post("/login", loginLimiter, validateLoginRequest, async (req, res) => {
-    const { email, deviceID } = req.body;
+    const { email, deviceID, set } = req.body;
     const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT);
 
     if (!validateEmail(email)) {
@@ -30,19 +30,18 @@ router.post("/login", loginLimiter, validateLoginRequest, async (req, res) => {
     }
 
     try {
-        // Assign a random answer set
-        const answerSet = getRandomSet();
-        
-        await pool.query(
+        // Use the provided set instead of random
+        const result = await pool.query(
             `INSERT INTO users (email_id, device_id, session_start, answer_set) 
-             VALUES ($1, $2, NOW(), $3)`,
-            [email, deviceID, answerSet]
+             VALUES ($1, $2, NOW(), $3) 
+             RETURNING *`,
+            [email, deviceID, set]
         );
 
         res.json({
             success: true,
             sessionTimeout,
-            answerSet // Send the assigned set to frontend
+            answerSet: set
         });
     } catch (error) {
         handleServerError(error, res);
@@ -124,6 +123,16 @@ router.post("/check-answer", validateCheckAnswer, async (req, res) => {
         }
 
         const answerSet = user.rows[0].answer_set;
+        
+        // Validate answer set exists
+        if (!answerSets[answerSet] || !answerSets[answerSet][index]) {
+            console.error('Invalid answer set or index:', { answerSet, index });
+            return res.json({ 
+                success: false, 
+                message: "Invalid answer set configuration" 
+            });
+        }
+
         const correctAnswer = answerSets[answerSet][index];
 
         // Ensure both are uppercase and trimmed for comparison
@@ -151,8 +160,7 @@ router.post("/check-answer", validateCheckAnswer, async (req, res) => {
 
         res.json({
             success: true,
-            isCorrect,
-            next: isCorrect ? puzzleLinks[index] : null
+            isCorrect
         });
     } catch (error) {
         console.error("Check answer error:", error);

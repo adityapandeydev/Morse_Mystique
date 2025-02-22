@@ -8,19 +8,6 @@ const answerSets = {
     'E': process.env.ANSWER_SET_E.split(',')
 };
 
-const puzzleLinks = [
-    process.env.PUZZLE_LINK_1 || "https://example.com/next1",
-    process.env.PUZZLE_LINK_2 || "https://example.com/next2",
-    process.env.PUZZLE_LINK_3 || "https://example.com/next3",
-    process.env.PUZZLE_LINK_4 || "https://example.com/next4",
-    "PUZZLE OVER"
-];
-
-const getRandomSet = () => {
-    const sets = ['A', 'B', 'C', 'D', 'E'];
-    return sets[Math.floor(Math.random() * sets.length)];
-};
-
 // Validate that all answer sets are properly loaded
 const validateAnswerSets = () => {
     const sets = ['A', 'B', 'C', 'D', 'E'];
@@ -35,7 +22,5 @@ const validateAnswerSets = () => {
 validateAnswerSets();
 
 module.exports = {
-    puzzleLinks,
-    answerSets,
-    getRandomSet
+    answerSets
 }; 

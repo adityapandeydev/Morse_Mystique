@@ -25,9 +25,11 @@ app.options('*', cors({
 // Routes
 const adminRoutes = require("./routes/adminRoutes");
 const userRoutes = require("./routes/userRoutes");
+const audioRoutes = require('./routes/audioRoutes');
 
 app.use("/api/admin", adminRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api", audioRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

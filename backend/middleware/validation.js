@@ -22,8 +22,10 @@ const validateRequest = (requiredFields) => (req, res, next) => {
     next();
 };
 
+const validateLoginRequest = validateRequest(['email', 'deviceID', 'set']);
+
 module.exports = {
-    validateLoginRequest: validateRequest(['email', 'deviceID']),
+    validateLoginRequest,
     validateSubmitRequest: validateRequest(['email', 'totalTime', 'solvedCount', 'remainingTime']),
     validateVerifyRequest: validateRequest(['email', 'deviceID'])
 }; 

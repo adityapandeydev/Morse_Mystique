@@ -5,6 +5,8 @@ import FirstConfirmModal from "./modals/FirstConfirmModal";
 import FinalConfirmModal from "./modals/FinalConfirmModal";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useTimer } from "../hooks/useTimer";
+import { useParams, Navigate } from 'react-router-dom';
+import AudioPlayer from './AudioPlayer';
 
 const puzzles: Puzzle[] = Array(5).fill(null).map((_, i) => ({ id: i + 1 }));
 
@@ -43,18 +45,14 @@ const resetAllStates = (
 };
 
 const MorseCodePuzzle = () => {
-    const [isLoggedIn, setIsLoggedIn] = useState(() => {
-        return localStorage.getItem("userLoggedIn") === "true";
-    });
-
+    // Move all hooks before any conditional returns
+    const { setId } = useParams<{ setId: string }>();
+    const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem("userLoggedIn") === "true");
     const [userInputs, setUserInputs] = useLocalStorage('userInputs', Array(5).fill(''));
     const [unlocked, setUnlocked] = useLocalStorage('unlockedPuzzles', Array(5).fill(false));
     const [timers, setTimers] = useLocalStorage('puzzleTimers', Array(5).fill(0));
     const [isSubmitted, setIsSubmitted] = useLocalStorage('isSubmitted', false);
-
-    // Simple countdown state
     const [countdownTime, setCountdownTime] = useState(60); // Default to 60 seconds
-
     const [email, setEmail] = useState("");
     const [loginMessage, setLoginMessage] = useState("");
     const [currentTimer, setCurrentTimer] = useTimer(false, null);
@@ -62,27 +60,16 @@ const MorseCodePuzzle = () => {
     const [currentPuzzleStartTime, setCurrentPuzzleStartTime] = useState<number | null>(null);
     const [showFirstConfirm, setShowFirstConfirm] = useState(false);
     const [showFinalConfirm, setShowFinalConfirm] = useState(false);
-    const [puzzleData, setPuzzleData] = useState<{[key: number]: {next: string}}>({});
-
-    // Add a state to store the final time
     const [finalTime, setFinalTime] = useState<number | null>(() => {
         const saved = localStorage.getItem("finalTime");
         return saved ? parseInt(saved) : null;
     });
-
-    // Add state for storing the paused time
     const [pausedTime, setPausedTime] = useState<number | null>(() => {
         const saved = localStorage.getItem("pausedTime");
         return saved ? parseInt(saved) : null;
     });
-
-    // Add new state for answer set
     const [answerSet, setAnswerSet] = useState<string | null>(null);
-
-    // Add this state at the top with other states
     const [timerStartTime, setTimerStartTime] = useState(() => Date.now());
-
-    // Add this state to store initial timeout
     const [initialTimeout, setInitialTimeout] = useState(() => {
         return parseInt(localStorage.getItem("initialTimeout") ?? "60");
     });
@@ -172,7 +159,44 @@ const MorseCodePuzzle = () => {
         return () => {
             if (intervalId) clearInterval(intervalId);
         };
-    }, [isLoggedIn, isSubmitted, timerStartTime, handleSubmit, initialTimeout]);
+    }, [isLoggedIn, isSubmitted, timerStartTime, handleSubmit, initialTimeout, countdownTime]);
+
+    // Add fullscreen handler
+    const enterFullscreen = useCallback(() => {
+        const element = document.documentElement;
+        if (element.requestFullscreen) {
+            element.requestFullscreen();
+        }
+    }, []);
+
+    // Handle visibility and fullscreen changes
+    useEffect(() => {
+        if (!isLoggedIn || isSubmitted) return;
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') {
+                handleSubmit();
+            }
+        };
+
+        const handleFullscreenChange = () => {
+            if (!document.fullscreenElement) {
+                handleSubmit();
+            }
+        };
+
+        // Enter fullscreen on login
+        enterFullscreen();
+
+        // Add event listeners
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        };
+    }, [isLoggedIn, isSubmitted, handleSubmit, enterFullscreen]);
 
     // Update login handler to clear all stored times
     const handleLogin = useCallback(async () => {
@@ -187,10 +211,12 @@ const MorseCodePuzzle = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json'
                 },
-                credentials: 'include',
-                body: JSON.stringify({ email, deviceID }),
+                body: JSON.stringify({ 
+                    email, 
+                    deviceID,
+                    set: setId!.toUpperCase() // Add non-null assertion (!) since we validate setId earlier
+                }),
             });
 
             const data = await response.json();
@@ -225,13 +251,15 @@ const MorseCodePuzzle = () => {
                 // Update answer set
                 setAnswerSet(data.answerSet);
                 localStorage.setItem("answerSet", data.answerSet);
+
+                enterFullscreen();
             } else {
                 setLoginMessage("Login denied: " + data.message);
             }
         } catch (error) {
             handleFetchError(error, setLoginMessage);
         }
-    }, [email, setIsSubmitted, setCurrentTimer, setTimers, setUnlocked, setUserInputs]);
+    }, [email, setId, enterFullscreen, setCurrentTimer, setIsSubmitted, setTimers, setUnlocked, setUserInputs]);
 
     // Update the verify endpoint handler
     useEffect(() => {
@@ -369,9 +397,7 @@ const MorseCodePuzzle = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json'
                 },
-                credentials: 'include',
                 body: JSON.stringify({ 
                     index,
                     answer: value,
@@ -381,32 +407,21 @@ const MorseCodePuzzle = () => {
 
             const data = await response.json();
             if (data.isCorrect) {
-                // Stop timer first
                 setIsTimerRunning(false);
                 
-                // Update timer for current puzzle
                 const newTimers = [...timers];
                 newTimers[index] = currentTimer;
                 setTimers(newTimers);
                 
-                // Update unlocked status
                 const newUnlocked = [...unlocked];
                 newUnlocked[index] = true;
                 setUnlocked(newUnlocked);
                 
-                // Save puzzle data
-                setPuzzleData(prev => ({
-                    ...prev,
-                    [index]: { next: data.next }
-                }));
-
-                // Start timer for next puzzle if not the last one
                 if (index < 4) {
                     setCurrentTimer(0);
                     setCurrentPuzzleStartTime(Date.now());
                     setIsTimerRunning(true);
                     
-                    // Focus next input
                     const nextInput = document.querySelector(`input[data-index="${index + 1}"]`) as HTMLInputElement;
                     if (nextInput) {
                         nextInput.focus();
@@ -416,7 +431,7 @@ const MorseCodePuzzle = () => {
         } catch (error) {
             handleFetchError(error, () => {});
         }
-    }, [countdownTime, timers, unlocked, currentTimer, userInputs, setTimers, setUnlocked, setPuzzleData, setCurrentTimer, setUserInputs]);
+    }, [countdownTime, timers, unlocked, currentTimer, userInputs, setTimers, setUnlocked, setCurrentTimer, setUserInputs]);
 
     // Update the first submit click handler
     const handleFirstSubmit = useCallback(() => {
@@ -449,6 +464,12 @@ const MorseCodePuzzle = () => {
             setIsTimerRunning(true);
         }
     }, [isLoggedIn, isSubmitted, currentPuzzleStartTime, unlocked, showFinalConfirm]);
+
+    // Then add the validation check
+    const validSets = ['A', 'B', 'C', 'D', 'E'];
+    if (!setId || !validSets.includes(setId.toUpperCase())) {
+        return <Navigate to="/set/A" replace />;
+    }
 
     if (!isLoggedIn) {
         return (
@@ -518,22 +539,16 @@ const MorseCodePuzzle = () => {
                                 data-index={index}
                                 autoFocus={index === 0 && !isSubmitted}
                             />
-                            {unlocked[index] && (
+                            {/* Show audio player only after solving previous puzzle */}
+                            {index < 4 && unlocked[index] && (
+                                <AudioPlayer 
+                                    set={answerSet ?? ''} 
+                                    puzzleIndex={index + 2}
+                                />
+                            )}
+                            {unlocked[index] && index === 4 && (
                                 <div className="w-48 h-12 flex items-center justify-center bg-gray-900 text-center rounded-md shadow-md">
-                                    {index === 4 ? (
-                                        <div className="flex flex-col items-center">
-                                            <span className="text-green-400 font-bold">Completed!</span>
-                                        </div>
-                                    ) : (
-                                        <a
-                                            href={puzzleData[index]?.next || '#'}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-400 underline hover:text-blue-300 transition"
-                                        >
-                                            Next Puzzle
-                                        </a>
-                                    )}
+                                    <span className="text-green-400 font-bold">Completed!</span>
                                 </div>
                             )}
                         </div>
