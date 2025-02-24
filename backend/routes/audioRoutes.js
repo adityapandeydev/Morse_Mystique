@@ -16,7 +16,7 @@ router.get('/audio/:set/:puzzle', (req, res) => {
         }
 
         // Construct the file path
-        const filePath = path.join(__dirname, `../Round 2/Set ${set}/Question  (${puzzle})/audio${puzzle}.mp3`);
+        const filePath = path.join(__dirname, `../Round 2/Set${set}/audio${puzzle}.wav`);
         console.log('Attempting to access:', filePath);
 
         // Check if file exists

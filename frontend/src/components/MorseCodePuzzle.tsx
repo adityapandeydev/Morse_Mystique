@@ -422,7 +422,7 @@ const MorseCodePuzzle = () => {
                     setCurrentPuzzleStartTime(Date.now());
                     setIsTimerRunning(true);
                     
-                    const nextInput = document.querySelector(`input[data-index="${index + 1}"]`) as HTMLInputElement;
+                    const nextInput = document.querySelector(`input[data-index="${index}"]`) as HTMLInputElement;
                     if (nextInput) {
                         nextInput.focus();
                     }
@@ -498,7 +498,7 @@ const MorseCodePuzzle = () => {
     return (
         <div className="flex flex-col min-h-screen bg-gradient-to-r from-gray-900 to-black text-white">
             {/* Countdown timer display */}
-            <div className="p-4 flex justify-center items-center">
+            <div className="p-3 flex justify-center items-center">
                 <div className="text-center">
                     <div className={`text-2xl font-mono font-bold ${!isSubmitted && countdownTime < 300 ? 'text-red-500' : 'text-white'}`}>
                         {formatCountdown(isSubmitted ? (pausedTime ?? countdownTime) : countdownTime)}
@@ -511,16 +511,16 @@ const MorseCodePuzzle = () => {
             
             {/* Add this below the countdown timer */}
             {answerSet && (
-                <div className="text-center mb-4">
+                <div className="text-center">
                     <span className="px-3 py-1 bg-gray-800 rounded-full text-sm font-mono">
                         Set {answerSet}
                     </span>
                 </div>
             )}
             
-            <div className="flex-1 flex flex-col items-center justify-center p-6">
+            <div className="flex-1 flex flex-col items-center justify-center p-5">
                 <h1 className="text-4xl font-bold mb-6 tracking-widest">Morse Code Puzzle</h1>
-                <div className="flex flex-col gap-6 w-full max-w-lg p-6 bg-gray-800 rounded-lg shadow-lg">
+                <div className="flex flex-col gap-4 w-full max-w-lg p-6 bg-gray-800 rounded-lg shadow-lg">
                     {puzzles.map((puzzle, index) => (
                         <div key={puzzle.id} className="flex items-center justify-between w-full gap-4">
                             <div className="w-32 h-12 flex items-center justify-center bg-gray-900 text-center rounded-md shadow-md font-mono">
@@ -604,6 +604,15 @@ const MorseCodePuzzle = () => {
                     onConfirm={handleFinalConfirm}
                 />
             )}
+
+            {/* Footer */}
+        <footer className="mt-auto border-t border-gray-700 text-sm text-gray-400 py-2 px-4 flex justify-between items-center">
+            <div className="flex items-center gap-1">
+                <span>©</span> 
+                <span>2025 Aditya Pandey</span>
+            </div>
+            <span>All rights reserved - Microsoft Student Chapter, VIT AP</span>
+        </footer>
         </div>
     );
 }
