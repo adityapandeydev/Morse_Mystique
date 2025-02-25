@@ -417,12 +417,14 @@ const MorseCodePuzzle = () => {
                 newUnlocked[index] = true;
                 setUnlocked(newUnlocked);
                 
-                if (index < 4) {
+                if (index === 4) {
+                    handleSubmit();
+                } else if (index < 4) {
                     setCurrentTimer(0);
                     setCurrentPuzzleStartTime(Date.now());
                     setIsTimerRunning(true);
                     
-                    const nextInput = document.querySelector(`input[data-index="${index}"]`) as HTMLInputElement;
+                    const nextInput = document.querySelector(`input[data-index="${index + 1}"]`) as HTMLInputElement;
                     if (nextInput) {
                         nextInput.focus();
                     }
@@ -431,7 +433,7 @@ const MorseCodePuzzle = () => {
         } catch (error) {
             handleFetchError(error, () => {});
         }
-    }, [countdownTime, timers, unlocked, currentTimer, userInputs, setTimers, setUnlocked, setCurrentTimer, setUserInputs]);
+    }, [countdownTime, timers, unlocked, currentTimer, userInputs, setTimers, setUnlocked, setCurrentTimer, setUserInputs, handleSubmit]);
 
     // Update the first submit click handler
     const handleFirstSubmit = useCallback(() => {
@@ -457,7 +459,6 @@ const MorseCodePuzzle = () => {
             setIsTimerRunning(true);
         }
         
-        // Reset puzzle timer when moving to next unsolved puzzle
         const currentUnsolved = unlocked.findIndex(u => !u);
         if (currentUnsolved !== -1 && !isSubmitted && !showFinalConfirm) {
             setCurrentPuzzleStartTime(Date.now());
@@ -497,7 +498,10 @@ const MorseCodePuzzle = () => {
 
     return (
         <div className="flex flex-col min-h-screen bg-gradient-to-r from-gray-900 to-black text-white">
-            {/* Countdown timer display */}
+            <div className="absolute top-4 right-4">
+                <img src="/logo.png" alt="Logo" className="h-30" />
+            </div>
+
             <div className="p-3 flex justify-center items-center">
                 <div className="text-center">
                     <div className={`text-2xl font-mono font-bold ${!isSubmitted && countdownTime < 300 ? 'text-red-500' : 'text-white'}`}>
@@ -509,7 +513,6 @@ const MorseCodePuzzle = () => {
                 </div>
             </div>
             
-            {/* Add this below the countdown timer */}
             {answerSet && (
                 <div className="text-center">
                     <span className="px-3 py-1 bg-gray-800 rounded-full text-sm font-mono">
@@ -539,17 +542,12 @@ const MorseCodePuzzle = () => {
                                 data-index={index}
                                 autoFocus={index === 0 && !isSubmitted}
                             />
-                            {/* Show audio player only after solving previous puzzle */}
-                            {index < 4 && unlocked[index] && (
+                            {/* Show audio player for current puzzle and already solved puzzles */}
+                            {((index === unlocked.findIndex(u => !u)) || unlocked[index]) && !isSubmitted && (
                                 <AudioPlayer 
                                     set={answerSet ?? ''} 
-                                    puzzleIndex={index + 2}
+                                    puzzleIndex={index + 1}
                                 />
-                            )}
-                            {unlocked[index] && index === 4 && (
-                                <div className="w-48 h-12 flex items-center justify-center bg-gray-900 text-center rounded-md shadow-md">
-                                    <span className="text-green-400 font-bold">Completed!</span>
-                                </div>
                             )}
                         </div>
                     ))}

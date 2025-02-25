@@ -7,21 +7,13 @@ router.get('/audio/:set/:puzzle', (req, res) => {
     const { set, puzzle } = req.params;
     
     try {
-        // Skip audio1 as it's not needed
-        if (puzzle === '1') {
-            return res.status(404).json({ 
-                success: false, 
-                message: "Audio not available" 
-            });
-        }
-
         // Construct the file path
         const filePath = path.join(__dirname, `../Round 2/Set${set}/audio${puzzle}.wav`);
         console.log('Attempting to access:', filePath);
 
         // Check if file exists
         if (!fs.existsSync(filePath)) {
-            console.log('File not found:', filePath); // Debug log
+            console.log('File not found:', filePath);
             return res.status(404).json({
                 success: false,
                 message: "Audio file not found"
@@ -41,7 +33,7 @@ router.get('/audio/:set/:puzzle', (req, res) => {
         // Create read stream
         const stream = fs.createReadStream(filePath);
         stream.on('error', (error) => {
-            console.error('Stream error:', error); // Debug log
+            console.error('Stream error:', error);
             res.status(500).json({
                 success: false,
                 message: "Error streaming audio"
@@ -50,7 +42,7 @@ router.get('/audio/:set/:puzzle', (req, res) => {
 
         stream.pipe(res);
     } catch (error) {
-        console.error('Audio route error:', error); // Debug log
+        console.error('Audio route error:', error);
         res.status(500).json({
             success: false,
             message: "Server error"
@@ -58,4 +50,4 @@ router.get('/audio/:set/:puzzle', (req, res) => {
     }
 });
 
-module.exports = router; 
+module.exports = router;
