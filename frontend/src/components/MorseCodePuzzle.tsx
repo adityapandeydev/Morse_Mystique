@@ -94,9 +94,11 @@ const MorseCodePuzzle = () => {
     // Update handleSubmit
     const handleSubmit = useCallback(async () => {
         try {
-            const solvedCount = unlocked.filter(Boolean).length;
+            const solvedCount = unlocked.filter(Boolean).length + (unlocked[4] ? 1 : 0); // Add 1 if final puzzle is solved
             const email = localStorage.getItem("userEmail");
             const totalTime = getTotalTime();
+
+            console.log('Submitting with solved count:', solvedCount); // Debug log
 
             const response = await fetch(`${API_URL}/api/user/submit-time`, {
                 method: 'POST',
@@ -161,7 +163,6 @@ const MorseCodePuzzle = () => {
         };
     }, [isLoggedIn, isSubmitted, timerStartTime, handleSubmit, initialTimeout, countdownTime]);
 
-    // Add fullscreen handler
     const enterFullscreen = useCallback(() => {
         const element = document.documentElement;
         if (element.requestFullscreen) {
@@ -382,6 +383,42 @@ const MorseCodePuzzle = () => {
         }
     };
 
+    // Add new handleAutoSubmit function
+    const handleAutoSubmit = useCallback(async (solvedCount: number) => {
+        try {
+            const email = localStorage.getItem("userEmail");
+            const totalTime = getTotalTime();
+
+            console.log('Auto-submitting final puzzle with solved count:', solvedCount);
+
+            const response = await fetch(`${API_URL}/api/user/submit-time`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email,
+                    totalTime,
+                    solvedCount,
+                    remainingTime: countdownTime,
+                    isAutoSubmit: true // Add flag to indicate auto-submission
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                setIsSubmitted(true);
+                setFinalTime(totalTime);
+                setPausedTime(countdownTime);
+                localStorage.setItem("finalTime", totalTime.toString());
+                localStorage.setItem("pausedTime", countdownTime.toString());
+                localStorage.setItem("isSubmitted", "true");
+            }
+        } catch (error) {
+            console.error("Auto-submit error:", error);
+        }
+    }, [getTotalTime, countdownTime, setIsSubmitted]);
+
     // Add handleChange function back
     const handleChange = useCallback(async (index: number, value: string) => {
         if (countdownTime === 0) return;
@@ -415,10 +452,18 @@ const MorseCodePuzzle = () => {
                 
                 const newUnlocked = [...unlocked];
                 newUnlocked[index] = true;
-                setUnlocked(newUnlocked);
+                
+                // Update unlocked state and wait for it to complete
+                await new Promise<void>(resolve => {
+                    setUnlocked(newUnlocked);
+                    setTimeout(resolve, 100); // Give React time to update state
+                });
                 
                 if (index === 4) {
-                    handleSubmit();
+                    // Calculate solved count including the last puzzle
+                    const finalSolvedCount = newUnlocked.filter(Boolean).length;
+                    console.log('Auto-submitting with solved count:', finalSolvedCount);
+                    await handleAutoSubmit(finalSolvedCount);
                 } else if (index < 4) {
                     setCurrentTimer(0);
                     setCurrentPuzzleStartTime(Date.now());
@@ -433,7 +478,7 @@ const MorseCodePuzzle = () => {
         } catch (error) {
             handleFetchError(error, () => {});
         }
-    }, [countdownTime, timers, unlocked, currentTimer, userInputs, setTimers, setUnlocked, setCurrentTimer, setUserInputs, handleSubmit]);
+    }, [countdownTime, timers, unlocked, currentTimer, userInputs, setTimers, setUnlocked, setCurrentTimer, setUserInputs, handleAutoSubmit]);
 
     // Update the first submit click handler
     const handleFirstSubmit = useCallback(() => {

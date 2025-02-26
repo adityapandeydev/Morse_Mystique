@@ -13,7 +13,7 @@ const handleServerError = (error, res) => {
 };
 
 /** User Login */
-router.post("/login", validateLoginRequest, async (req, res) => {
+    router.post("/login", validateLoginRequest, async (req, res) => {
     const { email, deviceID, set } = req.body;
     const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT);
 
@@ -78,20 +78,25 @@ router.post("/login", validateLoginRequest, async (req, res) => {
 
 /** Update User's Total Time and Solved Count */
 router.post("/submit-time", validateSubmitRequest, async (req, res) => {
-    const { email, totalTime, solvedCount } = req.body;
+    const { email, totalTime, solvedCount, remainingTime, isAutoSubmit } = req.body;
     
     try {
+        // For auto-submit, ensure we count all 5 puzzles if they're solved
+        const finalSolvedCount = isAutoSubmit ? 5 : solvedCount;
+
         // Store both the total time and the remaining time
-        await pool.query(
-            "UPDATE users SET total_time = $1, solved_count = $2, remaining_time = $3 WHERE email_id = $4",
-            [totalTime, solvedCount, req.body.remainingTime, email]
+        const result = await pool.query(
+            "UPDATE users SET total_time = $1, solved_count = $2, remaining_time = $3 WHERE email_id = $4 RETURNING solved_count",
+            [totalTime, finalSolvedCount, remainingTime, email]
         );
 
         res.json({ 
             success: true,
-            totalTime: totalTime
+            totalTime: totalTime,
+            updatedSolvedCount: result.rows[0]?.solved_count
         });
     } catch (error) {
+        console.error("Submit time error:", error);
         handleServerError(error, res);
     }
 });
