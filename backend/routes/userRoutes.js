@@ -1,18 +1,10 @@
 const express = require("express");
-const rateLimit = require('express-rate-limit');
 const { puzzleLinks, answers, answerSets, getRandomSet } = require('../config/puzzleData');
 const { validateLoginRequest, validateSubmitRequest, validateVerifyRequest } = require('../middleware/validation');
 const pool = require("../config/db");
 const { validateEmail } = require('../utils/validators');
 
 const router = express.Router();
-
-// Stricter rate limiting
-const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    message: { success: false, message: "Too many login attempts" }
-});
 
 // Error handler
 const handleServerError = (error, res) => {
@@ -21,7 +13,7 @@ const handleServerError = (error, res) => {
 };
 
 /** User Login */
-router.post("/login", loginLimiter, validateLoginRequest, async (req, res) => {
+router.post("/login", validateLoginRequest, async (req, res) => {
     const { email, deviceID, set } = req.body;
     const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT);
 

@@ -459,6 +459,7 @@ const MorseCodePuzzle = () => {
             setIsTimerRunning(true);
         }
         
+        // 
         const currentUnsolved = unlocked.findIndex(u => !u);
         if (currentUnsolved !== -1 && !isSubmitted && !showFinalConfirm) {
             setCurrentPuzzleStartTime(Date.now());
