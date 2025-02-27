@@ -6,7 +6,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/2026x" element={<AdminDashboard />} />
         <Route path="/set/:setId" element={<MorseCodePuzzle />} />
         <Route path="*" element={<Navigate to="/set/A" replace />} />
       </Routes>
