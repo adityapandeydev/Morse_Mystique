@@ -88,7 +88,7 @@ export default function AdminDashboard() {
 
     const handleRegister = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/admin/register`, {
+            const response = await fetch(`${API_URL}/api/2026x/register`, {
                 method: "POST",
                 headers: { 
                     "Content-Type": "application/json",
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
         try {
             const results = await Promise.all(
                 emailList.map(email =>
-                    fetch(`${API_URL}/api/admin/add-user`, {
+                    fetch(`${API_URL}/api/2026x/add-user`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -149,7 +149,7 @@ export default function AdminDashboard() {
     // Wrap fetch functions with useCallback
     const fetchUsers = useCallback(async () => {
         try {
-            const response = await fetch(`${API_URL}/api/admin/users`, {
+            const response = await fetch(`${API_URL}/api/2026x/users`, {
                 headers: {
                     "Authorization": `Bearer ${token}`
                 }
@@ -173,7 +173,7 @@ export default function AdminDashboard() {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch(`${API_URL}/api/admin/registered-users`, {
+            const response = await fetch(`${API_URL}/api/2026x/registered-users`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -212,7 +212,7 @@ export default function AdminDashboard() {
         }
 
         try {
-            const response = await fetch(`${API_URL}/api/admin/delete-user`, {
+            const response = await fetch(`${API_URL}/api/2026x/delete-user`, {
                 method: "DELETE",
                 headers: {
                     "Content-Type": "application/json",
