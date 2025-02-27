@@ -64,7 +64,7 @@ export default function AdminDashboard() {
 
     const handleAdminLogin = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/admin/login`, {
+            const response = await fetch(`${API_URL}/api/2026x/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),

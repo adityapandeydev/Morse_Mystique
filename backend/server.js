@@ -27,7 +27,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const userRoutes = require("./routes/userRoutes");
 const audioRoutes = require('./routes/audioRoutes');
 
-app.use("/api/admin", adminRoutes);
+app.use("/api/2026x", adminRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api", audioRoutes);
 
