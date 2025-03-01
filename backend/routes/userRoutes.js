@@ -1,4 +1,5 @@
 const express = require("express");
+const bcrypt = require('bcrypt');  // Add this line
 const { puzzleLinks, answers, answerSets, getRandomSet } = require('../config/puzzleData');
 const { validateLoginRequest, validateSubmitRequest, validateVerifyRequest } = require('../middleware/validation');
 const pool = require("../config/db");
@@ -12,9 +13,54 @@ const handleServerError = (error, res) => {
     res.status(500).json({ success: false, message: "Server error" });
 };
 
+// Add registration endpoint
+router.post("/register", async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!validateEmail(email)) {
+        return res.status(400).json({ success: false, message: "Invalid email format" });
+    }
+
+    if (!password || password.length < 6) {
+        return res.status(400).json({ success: false, message: "Password must be at least 6 characters long" });
+    }
+
+    try {
+        // Check if user already exists
+        const existingUser = await pool.query(
+            "SELECT * FROM registered_users WHERE email_id = $1",
+            [email]
+        );
+
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Email already registered"
+            });
+        }
+
+        // Hash the password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Insert new user
+        await pool.query(
+            "INSERT INTO registered_users (email_id, password) VALUES ($1, $2)",
+            [email, hashedPassword]
+        );
+
+        res.json({
+            success: true,
+            message: "Registration successful"
+        });
+    } catch (error) {
+        console.error("Registration error:", error);
+        handleServerError(error, res);
+    }
+});
+
 /** User Login */
-    router.post("/login", validateLoginRequest, async (req, res) => {
-    const { email, deviceID, set } = req.body;
+router.post("/login", validateLoginRequest, async (req, res) => {
+    const { email, password, deviceID, set } = req.body;
     const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT);
 
     if (!validateEmail(email)) {
@@ -22,6 +68,28 @@ const handleServerError = (error, res) => {
     }
 
     try {
+        // Check if user exists and verify password
+        const user = await pool.query(
+            "SELECT * FROM registered_users WHERE email_id = $1",
+            [email]
+        );
+
+        if (user.rows.length === 0) {
+            return res.status(403).json({
+                success: false,
+                message: "Invalid email or password"
+            });
+        }
+
+        // Verify password
+        const validPassword = await bcrypt.compare(password, user.rows[0].password);
+        if (!validPassword) {
+            return res.status(403).json({
+                success: false,
+                message: "Invalid email or password"
+            });
+        }
+
         // First check if user is registered
         const registeredUser = await pool.query(
             "SELECT * FROM registered_users WHERE email_id = $1",

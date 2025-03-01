@@ -74,6 +74,14 @@ const MorseCodePuzzle = () => {
         return parseInt(localStorage.getItem("initialTimeout") ?? "60");
     });
 
+    // Add registration state
+    const [showRegister, setShowRegister] = useState(false);
+    const [password, setPassword] = useState("");
+    const [registerData, setRegisterData] = useState({
+        email: "",
+        password: ""
+    });
+
     // Generate deviceID once and store it
     useEffect(() => {
         if (!localStorage.getItem("deviceID")) {
@@ -215,6 +223,7 @@ const MorseCodePuzzle = () => {
                 },
                 body: JSON.stringify({ 
                     email, 
+                    password,
                     deviceID,
                     set: setId!.toUpperCase() // Add non-null assertion (!) since we validate setId earlier
                 }),
@@ -260,7 +269,7 @@ const MorseCodePuzzle = () => {
         } catch (error) {
             handleFetchError(error, setLoginMessage);
         }
-    }, [email, setId, enterFullscreen, setCurrentTimer, setIsSubmitted, setTimers, setUnlocked, setUserInputs]);
+    }, [email, password, setId, enterFullscreen, setCurrentTimer, setIsSubmitted, setTimers, setUnlocked, setUserInputs]);
 
     // Update the verify endpoint handler
     useEffect(() => {
@@ -518,24 +527,103 @@ const MorseCodePuzzle = () => {
         return <Navigate to="/set/A" replace />;
     }
 
+    // Add registration handler
+    const handleRegister = async () => {
+        if (!validateEmail(registerData.email)) {
+            setLoginMessage("Please enter a valid email address");
+            return;
+        }
+
+        if (registerData.password.length < 6) {
+            setLoginMessage("Password must be at least 6 characters long");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/api/user/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(registerData),
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                setLoginMessage("Registration successful! Please login.");
+                setShowRegister(false);
+                // Clear registration form
+                setRegisterData({ email: "", password: "" });
+            } else {
+                setLoginMessage(data.message || "Registration failed");
+            }
+        } catch (error) {
+            handleFetchError(error, setLoginMessage);
+        }
+    };
+
     if (!isLoggedIn) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-6">
-                <h1 className="text-4xl font-bold mb-6">Login to Play</h1>
-                <input
-                    type="email"
-                    className="p-3 rounded-md bg-gray-700 text-white border border-gray-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-400 w-80 text-lg"
-                    placeholder="Enter your email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onKeyPress={handleLoginKeyPress}
-                    autoFocus
-                />
+                <h1 className="text-4xl font-bold mb-6">{showRegister ? 'Register' : 'Login'} to Play</h1>
+                {showRegister ? (
+                    <>
+                        <input
+                            type="email"
+                            className="p-3 rounded-md bg-gray-700 text-white border border-gray-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-400 w-80 text-lg mb-4"
+                            placeholder="Enter your email"
+                            value={registerData.email}
+                            onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
+                            autoFocus
+                        />
+                        <input
+                            type="password"
+                            className="p-3 rounded-md bg-gray-700 text-white border border-gray-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-400 w-80 text-lg"
+                            placeholder="Choose password"
+                            value={registerData.password}
+                            onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
+                        />
+                        <button
+                            className="mt-4 px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-md"
+                            onClick={handleRegister}
+                        >
+                            Register
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <input
+                            type="email"
+                            className="p-3 rounded-md bg-gray-700 text-white border border-gray-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-400 w-80 text-lg mb-4"
+                            placeholder="Enter your email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            autoFocus
+                        />
+                        <input
+                            type="password"
+                            className="p-3 rounded-md bg-gray-700 text-white border border-gray-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-400 w-80 text-lg"
+                            placeholder="Enter password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            onKeyPress={handleLoginKeyPress}
+                        />
+                        <button
+                            className="mt-4 px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-md"
+                            onClick={handleLogin}
+                        >
+                            Login
+                        </button>
+                    </>
+                )}
                 <button
-                    className="mt-4 px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-md"
-                    onClick={handleLogin}
+                    className="mt-4 text-blue-400 hover:text-blue-300"
+                    onClick={() => {
+                        setShowRegister(!showRegister);
+                        setLoginMessage("");
+                    }}
                 >
-                    Login
+                    {showRegister ? 'Already have an account? Login' : 'New user? Register'}
                 </button>
                 {loginMessage && <p className="mt-4 text-red-400">{loginMessage}</p>}
             </div>
